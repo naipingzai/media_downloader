@@ -301,7 +301,7 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("请先选择平台")
             return
         self._result_view.clear()
-        self._result_view.append(f"执行: {feature_id}", "#38bdf8")
+        self._result_view.append(f"执行: {feature_id}")
         self._status_feature.setText(f"功能: {feature_id}")
         cookie = self._cm.get(self._current_platform)
         save_dir = VOLUME / self._current_platform

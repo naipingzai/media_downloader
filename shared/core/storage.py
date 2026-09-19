@@ -21,8 +21,17 @@ def safe_name(text: str) -> str:
     return text.strip()[:80] or "unknown"
 
 
-def detect_extension(work: dict) -> str:
-    """根据作品数据判断扩展名。"""
+def detect_extension(work: dict, profile_key: str = "") -> str:
+    """根据作品数据和输出配置判断扩展名。"""
+    from shared.core.formats import OUTPUT_PROFILES, ContainerFormat
+    # 如果指定了输出配置，使用配置的扩展名
+    if profile_key and profile_key in OUTPUT_PROFILES:
+        prof = OUTPUT_PROFILES[profile_key]
+        if prof.container == ContainerFormat.RAW:
+            pass  # 继续根据内容判断
+        else:
+            return prof.container.value
+    # 根据内容类型判断
     if work.get("video_url"):
         return "mp4"
     if work.get("image_urls"):

@@ -1,4 +1,4 @@
-"""功能选择 + URL + 输出格式 + 编码 + 存储模式 + 执行按钮。"""
+"""功能选择 + URL + 输出格式(按媒体类型) + 编码 + 存储模式 + 执行。"""
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QComboBox, QHBoxLayout, QLabel, QLineEdit, QPushButton,
@@ -9,9 +9,14 @@ from shared.core.formats import (
     ContainerFormat, VIDEO_CODECS, AUDIO_CODECS, OUTPUT_PROFILES,
 )
 
+# 功能分类
+VIDEO_FEATURES = {"download", "account", "mix", "collection", "col_music", "collects",
+                  "tk_download", "tk_account", "tk_mix", "ks_download", "ks_account", "xhs_download"}
+AUDIO_FEATURES = {"live", "tk_live"}  # 直播流
+COLLECT_FEATURES = {"hot", "search", "comment", "user"}
 
 class FeaturePanel(QWidget):
-    execute_clicked = Signal(str, str, str, str)  # feature_id, url, profile_key, storage
+    execute_clicked = Signal(str, str, str, str)
     preview_clicked = Signal(str)
 
     def __init__(self, parent=None):
@@ -42,28 +47,34 @@ class FeaturePanel(QWidget):
         r2.addWidget(self.preview_btn)
         layout.addLayout(r2)
 
+        # 输出格式区 (根据媒体类型动态显示)
+        self._format_widget = QWidget()
+        fl = QVBoxLayout(self._format_widget)
+        fl.setContentsMargins(0, 0, 0, 0)
+        fl.setSpacing(4)
+
         r3 = QHBoxLayout()
-        r3.addWidget(QLabel("输出预设:"))
+        r3.addWidget(QLabel("预设:"))
         self.profile_combo = QComboBox()
         for key, prof in OUTPUT_PROFILES.items():
             self.profile_combo.addItem(prof.name, key)
         r3.addWidget(self.profile_combo, 1)
-        layout.addLayout(r3)
+        fl.addLayout(r3)
 
         r4 = QHBoxLayout()
         r4.addWidget(QLabel("视频编码:"))
         self.video_codec = QComboBox()
         for key, vc in VIDEO_CODECS.items():
             self.video_codec.addItem(vc.name, key)
-        self.video_codec.setCurrentText("直接复制 (不转码)")
         r4.addWidget(self.video_codec, 1)
         r4.addWidget(QLabel("音频编码:"))
         self.audio_codec = QComboBox()
         for key, ac in AUDIO_CODECS.items():
             self.audio_codec.addItem(ac.name, key)
-        self.audio_codec.setCurrentText("直接复制")
         r4.addWidget(self.audio_codec, 1)
-        layout.addLayout(r4)
+        fl.addLayout(r4)
+
+        layout.addWidget(self._format_widget)
 
         r5 = QHBoxLayout()
         r5.addWidget(QLabel("存储:"))
@@ -94,12 +105,26 @@ class FeaturePanel(QWidget):
 
     def _on_feature_changed(self, index):
         fid = self.fn_combo.currentData()
-        if not fid: return
+        if not fid:
+            return
         features = PlatformBus.get_features(self._current_platform())
         meta = next((f for f in features if f.id == fid), None)
         if meta:
             self.url_input.setVisible(meta.need_url)
             self.preview_btn.setVisible(meta.need_url)
+        # 根据功能类型切换显示格式选项
+        if fid in COLLECT_FEATURES:
+            self.profile_combo.setVisible(False)
+            self.video_codec.setVisible(False)
+            self.audio_codec.setVisible(False)
+        elif fid in AUDIO_FEATURES:
+            self.profile_combo.setVisible(True)
+            self.video_codec.setVisible(False)
+            self.audio_codec.setVisible(True)
+        else:
+            self.profile_combo.setVisible(True)
+            self.video_codec.setVisible(True)
+            self.audio_codec.setVisible(True)
 
     def _on_execute(self):
         fid = self.fn_combo.currentData()
