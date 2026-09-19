@@ -3,7 +3,7 @@ from PySide6.QtCore import Qt, QThreadPool
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QLineEdit,
-    QMainWindow, QPushButton, QScrollArea, QSplitter, QVBoxLayout, QWidget,
+    QMainWindow, QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
 from shared.core import PROJECT_NAME, VOLUME, __VERSION__
 from shared.core.config import ConfigManager
@@ -134,41 +134,35 @@ class MainWindow(QMainWindow):
         hl.addStretch()
         wl.addWidget(hero)
 
-        # Content splitter: left (info + controls) | right (result)
-        splitter = QSplitter(Qt.Horizontal)
+        # Content: horizontal layout
+        content_row = QHBoxLayout()
+        content_row.setSpacing(16)
 
         # Left: VideoInfo + FeaturePanel
-        left = QWidget()
-        ll = QVBoxLayout(left)
-        ll.setContentsMargins(0, 0, 0, 0)
-        ll.setSpacing(12)
+        left_col = QVBoxLayout()
+        left_col.setSpacing(12)
 
         self._video_info = VideoInfoWidget()
-        ll.addWidget(self._video_info, 2)
+        left_col.addWidget(self._video_info, 2)
 
         self._feature_panel = FeaturePanel()
         self._feature_panel.execute_clicked.connect(self._on_execute)
         self._feature_panel.preview_clicked.connect(self._on_preview)
-        ll.addWidget(self._feature_panel, 1)
-
-        splitter.addWidget(left)
+        left_col.addWidget(self._feature_panel, 1)
+        content_row.addLayout(left_col, 5)
 
         # Right: Result + CollectResult
-        right = QWidget()
-        rl = QVBoxLayout(right)
-        rl.setContentsMargins(0, 0, 0, 0)
-        rl.setSpacing(8)
+        right_col = QVBoxLayout()
+        right_col.setSpacing(8)
 
         self._result_view = ResultView()
-        rl.addWidget(self._result_view, 2)
+        right_col.addWidget(self._result_view, 2)
 
         self._collect_result = CollectResultView()
-        rl.addWidget(self._collect_result, 1)
+        right_col.addWidget(self._collect_result, 1)
+        content_row.addLayout(right_col, 5)
 
-        splitter.addWidget(right)
-        splitter.setSizes([550, 450])
-
-        wl.addWidget(splitter, 1)
+        wl.addLayout(content_row, 1)
 
         # Download queue header
         qh = QHBoxLayout()
