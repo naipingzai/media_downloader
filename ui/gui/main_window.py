@@ -1,15 +1,15 @@
-"""主窗口。"""
-import os
+"""主窗口 — 融合 bilibili-downloader 设计。"""
 from PySide6.QtCore import Qt, QThreadPool
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QMainWindow, QMenu, QPushButton,
-    QSplitter, QVBoxLayout, QWidget,
+    QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QLineEdit,
+    QMainWindow, QScrollArea, QSplitter, QVBoxLayout, QWidget,
 )
 from shared.core import PROJECT_NAME, VOLUME, __VERSION__
 from shared.core.config import ConfigManager
 from shared.core.cookies import CookieManager
 from shared.core.ops import PlatformBus
+from platforms import load_all_platforms, get_platform
 from .dialogs.login_dialog import LoginDialog
 from .dialogs.settings_dialog import SettingsDialog
 from .threads.worker import FeatureWorker
@@ -18,15 +18,14 @@ from .widgets.feature_panel import FeaturePanel
 from .widgets.video_info import VideoInfoWidget
 from .widgets.collect_result import CollectResultView
 from .widgets.result_view import ResultView
-from platforms import load_all_platforms, get_platform
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(PROJECT_NAME)
+        self.setWindowTitle(f"{PROJECT_NAME}")
         self.setMinimumSize(900, 640)
-        self.resize(1200, 800)
+        self.resize(1280, 860)
         load_all_platforms()
         self._cm = CookieManager()
         self._current_platform = ""
@@ -35,7 +34,6 @@ class MainWindow(QMainWindow):
         self._setup_ui()
         self._setup_menu()
         self._setup_status_bar()
-        self.statusBar().showMessage(f"{PROJECT_NAME} v{__VERSION__}")
 
     def _setup_ui(self):
         central = QWidget()
@@ -44,45 +42,86 @@ class MainWindow(QMainWindow):
         shell.setContentsMargins(0, 0, 0, 0)
         shell.setSpacing(0)
 
-        # Sidebar
+        # ===== SIDEBAR =====
         sidebar = QFrame()
         sidebar.setObjectName("Sidebar")
-        sidebar.setFixedWidth(180)
+        sidebar.setFixedWidth(212)
         sb = QVBoxLayout(sidebar)
-        sb.setContentsMargins(16, 20, 16, 16)
-        sb.setSpacing(8)
-        brand = QLabel(PROJECT_NAME.split()[0])
-        brand.setObjectName("BrandTitle")
-        sb.addWidget(brand)
-        sb.addSpacing(12)
-        self._platforms = []
+        sb.setContentsMargins(18, 22, 18, 18)
+        sb.setSpacing(10)
+
+        # Brand
+        brand_title = QLabel("MediaDownloader")
+        brand_title.setObjectName("BrandTitle")
+        brand_caption = QLabel("多平台媒体下载")
+        brand_caption.setObjectName("MutedLabel")
+        sb.addWidget(brand_title)
+        sb.addWidget(brand_caption)
+        sb.addSpacing(16)
+
+        # Platform navigation
+        section = QLabel("PLATFORMS")
+        section.setObjectName("NavSection")
+        sb.addWidget(section)
         self._platform_btns = []
         for pid in PlatformBus.list_platforms():
-            btn = QPushButton(pid)
+            btn = QPushButton(f"  {pid.title()}")
+            btn.setObjectName("NavButton")
             btn.setCheckable(True)
             btn.clicked.connect(lambda checked, p=pid: self._select_platform(p))
             sb.addWidget(btn)
             self._platform_btns.append(btn)
         sb.addSpacing(16)
-        sb.addWidget(QLabel(""))
-        login_btn = QPushButton("登录/Cookie")
-        login_btn.clicked.connect(self._open_login)
-        sb.addWidget(login_btn)
-        settings_btn = QPushButton("设置")
-        settings_btn.clicked.connect(self._open_settings)
-        sb.addWidget(settings_btn)
+
+        # Sidebar info card
+        info_card = QFrame()
+        info_card.setObjectName("InfoCard")
+        ic = QVBoxLayout(info_card)
+        ic.setContentsMargins(14, 14, 14, 14)
+        ic.setSpacing(4)
+        info_title = QLabel("功能概览")
+        info_title.setObjectName("InfoTitle")
+        info_text = QLabel("支持 4 个平台 · 18 个功能\n下载 · 采集 · 批量 · 存储")
+        info_text.setObjectName("SidebarCaption")
+        info_text.setWordWrap(True)
+        ic.addWidget(info_title)
+        ic.addWidget(info_text)
+        sb.addWidget(info_card)
+
         sb.addStretch()
-        ver = QLabel(f"v{__VERSION__}")
-        ver.setObjectName("MutedLabel")
-        sb.addWidget(ver)
+
+        # Login button
+        self._login_btn = QPushButton("登录 / Cookie")
+        self._login_btn.setObjectName("SidebarAction")
+        self._login_btn.clicked.connect(self._open_login)
+        sb.addWidget(self._login_btn)
+
         shell.addWidget(sidebar)
 
-        # Content
-        content = QWidget()
-        cl = QVBoxLayout(content)
-        cl.setContentsMargins(0, 0, 0, 0)
-        cl.setSpacing(0)
+        # ===== WORKSPACE =====
+        workspace = QWidget()
+        workspace.setObjectName("Workspace")
+        wl = QVBoxLayout(workspace)
+        wl.setContentsMargins(26, 22, 26, 16)
+        wl.setSpacing(12)
 
+        # Header
+        header = QHBoxLayout()
+        ht = QVBoxLayout()
+        ht.setSpacing(2)
+        ht.addWidget(QLabel("下载控制台"))
+        page_sub = QLabel("融合 bilibili-downloader 设计，支持多平台媒体下载")
+        page_sub.setObjectName("Caption")
+        ht.addWidget(page_sub)
+        header.addLayout(ht)
+        header.addStretch()
+        self._header_login = QPushButton("未登录")
+        self._header_login.setObjectName("GhostButton")
+        self._header_login.clicked.connect(self._open_login)
+        header.addWidget(self._header_login)
+        wl.addLayout(header)
+
+        # HeroPanel
         hero = HeroPanel()
         hl = QVBoxLayout(hero)
         hl.setContentsMargins(28, 24, 28, 26)
@@ -93,26 +132,60 @@ class MainWindow(QMainWindow):
         hl.addWidget(self._hero_title)
         hl.addWidget(self._hero_sub)
         hl.addStretch()
-        cl.addWidget(hero)
+        wl.addWidget(hero)
 
-        splitter = QSplitter(Qt.Vertical)
+        # Content splitter: left (info + controls) | right (result)
+        splitter = QSplitter(Qt.Horizontal)
+
+        # Left: VideoInfo + FeaturePanel
+        left = QWidget()
+        ll = QVBoxLayout(left)
+        ll.setContentsMargins(0, 0, 0, 0)
+        ll.setSpacing(12)
+
+        self._video_info = VideoInfoWidget()
+        ll.addWidget(self._video_info, 2)
+
         self._feature_panel = FeaturePanel()
         self._feature_panel.execute_clicked.connect(self._on_execute)
         self._feature_panel.preview_clicked.connect(self._on_preview)
-        splitter.addWidget(self._feature_panel)
+        ll.addWidget(self._feature_panel, 1)
 
-        bottom = QWidget()
-        bl = QHBoxLayout(bottom)
-        bl.setContentsMargins(0, 0, 0, 0)
-        self._video_info = VideoInfoWidget()
-        bl.addWidget(self._video_info, 3)
+        splitter.addWidget(left)
+
+        # Right: Result + CollectResult
+        right = QWidget()
+        rl = QVBoxLayout(right)
+        rl.setContentsMargins(0, 0, 0, 0)
+        rl.setSpacing(8)
+
         self._result_view = ResultView()
-        bl.addWidget(self._result_view, 2)
-        splitter.addWidget(bottom)
-        splitter.setSizes([400, 300])
-        cl.addWidget(splitter, 1)
+        rl.addWidget(self._result_view, 2)
 
-        shell.addWidget(content, 1)
+        self._collect_result = CollectResultView()
+        rl.addWidget(self._collect_result, 1)
+
+        splitter.addWidget(right)
+        splitter.setSizes([550, 450])
+
+        wl.addWidget(splitter, 1)
+
+        # Download queue header
+        qh = QHBoxLayout()
+        qh.addWidget(QLabel("任务队列"))
+        qh.addStretch()
+        pause_btn = QPushButton("全部暂停")
+        pause_btn.setObjectName("SubtleButton")
+        qh.addWidget(pause_btn)
+        resume_btn = QPushButton("全部继续")
+        resume_btn.setObjectName("SubtleButton")
+        qh.addWidget(resume_btn)
+        clear_btn = QPushButton("清除完成")
+        clear_btn.setObjectName("SubtleButton")
+        qh.addWidget(clear_btn)
+        wl.addLayout(qh)
+
+        shell.addWidget(workspace, 1)
 
     def _setup_menu(self):
         mb = self.menuBar()
@@ -135,11 +208,12 @@ class MainWindow(QMainWindow):
         self.statusBar().addPermanentWidget(self._status_platform)
         self.statusBar().addPermanentWidget(self._status_feature)
         self.statusBar().addPermanentWidget(self._status_cookie)
+        self.statusBar().showMessage(f"{PROJECT_NAME} v{__VERSION__}")
 
     def _select_platform(self, platform):
         self._current_platform = platform
         for btn in self._platform_btns:
-            btn.setChecked(btn.text() == platform)
+            btn.setChecked(btn.text().strip().lower() == platform)
         features = PlatformBus.get_features(platform)
         self._feature_panel.set_features(features)
         self._hero_title.setText(platform.title())
@@ -147,11 +221,13 @@ class MainWindow(QMainWindow):
         ops = PlatformBus.get_ops(platform)
         cookie = self._cm.get(platform)
         hint = ops.cookie_hint if ops else ""
-        cookie_text = f"Cookie: {'✓ ' + str(len(cookie)) + '字符' if cookie else '✗ 未设置'}" if hint else "Cookie: 不需要"
+        cookie_text = f"Cookie: {'已设置 ' + str(len(cookie)) + '字符' if cookie else '未设置'}" if hint else "Cookie: 不需要"
         self._status_platform.setText(f"平台: {platform}")
         self._status_cookie.setText(cookie_text)
+        self._header_login.setText(f"{platform.title()} {'已登录' if cookie else '未登录'}")
         self._video_info.show_empty()
         self._result_view.clear()
+        self._collect_result.show_empty()
 
     def _open_login(self):
         if not self._current_platform:
@@ -163,8 +239,9 @@ class MainWindow(QMainWindow):
         dlg = LoginDialog(self._current_platform, hint, current, self)
         dlg.exec()
         cookie = self._cm.get(self._current_platform)
-        cookie_text = f"Cookie: {'✓ ' + str(len(cookie)) + '字符' if cookie else '✗ 未设置'}"
+        cookie_text = f"Cookie: {'已设置 ' + str(len(cookie)) + '字符' if cookie else '未设置'}"
         self._status_cookie.setText(cookie_text)
+        self._header_login.setText(f"{self._current_platform.title()} {'已登录' if cookie else '未登录'}")
 
     def _open_settings(self):
         SettingsDialog(self).exec()
@@ -182,9 +259,9 @@ class MainWindow(QMainWindow):
             return
         self._result_view.clear()
         self._result_view.append("正在解析...", "#94a3b8")
+        import asyncio
         from shared.core.session import create_async_client
         from shared.flow.link import LinkExtractor
-        import asyncio
         async def _do():
             client = create_async_client()
             try:
@@ -240,5 +317,16 @@ class MainWindow(QMainWindow):
         self._result_view.set_result(result)
         if result.get("success"):
             self.statusBar().showMessage(result.get("message", "完成"))
+            data = result.get("data")
+            if data and isinstance(data, list) and len(data) > 0:
+                d = data[0]
+                if "word" in d:
+                    self._collect_result.show_hot_list(data)
+                elif "user" in d and "text" in d:
+                    self._collect_result.show_comments(data)
+                elif "title" in d and "author" in d:
+                    self._collect_result.show_search(data)
+            elif data and isinstance(data, dict):
+                self._collect_result.show_user(data)
         else:
             self.statusBar().showMessage(f"失败: {result.get('message', '')}")
