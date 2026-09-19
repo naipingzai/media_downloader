@@ -67,7 +67,7 @@ class MainWindow(QMainWindow):
         for pid in PlatformBus.list_platforms():
             btn = QPushButton(f"  {pid.title()}")
             btn.setObjectName("NavButton")
-            btn.setCheckable(True)
+            
             btn.clicked.connect(lambda checked, p=pid: self._select_platform(p))
             sb.addWidget(btn)
             self._platform_btns.append(btn)
