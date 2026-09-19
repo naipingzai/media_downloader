@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>MediaDownloader</title>
+<style>
+body{font-family:system-ui;background:#0f172a;color:#e2e8f0;padding:20px}
+.c{background:#1e293b;border-radius:12px;padding:24px;max-width:600px;margin:0 auto}
+h1{color:#facc15;text-align:center}
+.s{color:#22d3ee;font-weight:700;margin:12px 0 4px}
+select,input{width:100%;padding:8px;border-radius:6px;border:1px solid #64748b;background:#fff;color:#000;margin-bottom:8px}
+button{padding:8px 16px;border-radius:6px;border:none;font-weight:600;cursor:pointer;margin-right:6px}
+.go{background:#22c55e;color:#0f172a}.sv{background:#3b82f6;color:#fff}.op{background:#8b5cf6;color:#fff}
+#r{margin-top:10px;padding:10px;background:#0f172a;white-space:pre-wrap;max-height:300px;overflow-y:auto;display:none;border:1px solid #334155}
+.ok{border-left:4px solid #22c55e}.er{border-left:4px solid #ef4444}
+.h{display:none}
+</style>
+</head>
+<body>
+<div class="c">
+<h1>MediaDownloader</h1>
+
+<div class="s">第一步: 选择平台</div>
+<select id="p" onchange="onP()"><option value="">加载中...</option></select>
+
+<div id="s2" class="h"><div class="s">第二步: Cookie 管理</div>
+  <div id="cs" style="color:#ef4444">未设置</div>
+  <input id="ct" placeholder="粘贴 Cookie">
+  <button class="sv" onclick="save()">保存 Cookie</button>
+</div>
+
+<div id="s3" class="h"><div class="s">第三步: 选择功能</div>
+  <select id="fn"><option value="">请选择功能</option></select>
+</div>
+
+<div id="s4" class="h"><div class="s">第四步: 输入链接</div>
+  <input id="url" placeholder="粘贴链接/关键词">
+</div>
+
+<div id="s5" class="h"><div class="s">第五步: 存储模式</div>
+  <select id="sm"><option value="flat">直接存储</option><option value="by_author">按作者分目录</option><option value="by_date">按日期分目录</option><option value="by_type">按类型分目录</option></select>
+</div>
+
+<div id="btns" class="h">
+  <button class="go" onclick="doRun()">执行</button>
+  <button onclick="openD()">打开目录</button>
+</div>
+
+<div id="r"></div>
+</div>
+
+<script>
+var needLink=1,cp="";
+
+function init(){
+  var s=document.getElementById("p");
+  pywebview.api.get_features().then(function(r){
+    var F=typeof r==="string"?JSON.parse(r):r;
+    s.innerHTML="<option value="">-- 请选择平台 --</option>";
+    var k=Object.keys(F);
+    for(var i=0;i<k.length;i++){var o=document.createElement("option");o.value=k[i];o.textContent=k[i];s.appendChild(o)}
+    window._F=F;
+  }).catch(function(e){s.innerHTML="<option>错误: "+e+"</option>"})
+}
+
+function onP(){
+  cp=document.getElementById("p").value;
+  document.getElementById("s2").className="h";
+  document.getElementById("s3").className="h";
+  document.getElementById("s4").className="h";
+  document.getElementById("s5").className="h";
+  document.getElementById("btns").className="h";
+  if(!cp)return;
+  pywebview.api.get_cookie_hint(cp).then(function(r){
+    var hint=typeof r==="string"?r:"";
+    document.getElementById("s2").className=hint?"":"h";
+    if(hint)updateCookie();
+  });
+  var sel=document.getElementById("fn");
+  sel.innerHTML="";
+  if(window._F&&window._F[cp]){
+    window._F[cp].forEach(function(f){var o=document.createElement("option");o.value=f.id;o.textContent=f.name;o.dataset.nl=f.need_link?"1":"0";sel.appendChild(o)});
+  }
+  document.getElementById("s3").className="";
+  sel.onchange=function(){
+    var o=sel.options[sel.selectedIndex];
+    needLink=o.dataset.nl==="1";
+    document.getElementById("s4").className=needLink?"":"h";
+    document.getElementById("s5").className="";
+    document.getElementById("btns").className="";
+  };
+}
+
+function updateCookie(){
+  if(!cp)return;
+  pywebview.api.get_cookie(cp).then(function(r){
+    var j=typeof r==="string"?JSON.parse(r):r;
+    var el=document.getElementById("cs");
+    if(j.length>0){el.innerHTML="已设置 ("+j.length+"字符)";el.style.color="#22c55e"}
+    else{el.innerHTML="未设置";el.style.color="#ef4444"}
+  });
+}
+
+function save(){
+  var t=document.getElementById("ct").value.trim();
+  if(!t){alert("请输入 Cookie");return}
+  pywebview.api.save_cookie(cp,t).then(function(){
+    document.getElementById("ct").value="";
+    updateCookie();
+    alert("已保存");
+  });
+}
+
+function openD(){pywebview.api.open_download_folder()}
+
+function doRun(){
+  var fv=document.getElementById("fn").value;
+  if(!fv){alert("请选择功能");return}
+  if(needLink&&!document.getElementById("url").value.trim()){alert("请输入链接");return}
+  var r=document.getElementById("r");
+  r.style.display="block";r.className="";r.textContent="执行中...";
+  pywebview.api.execute(cp,fv,document.getElementById("url").value).then(function(res){
+    var j=typeof res==="string"?JSON.parse(res):res;
+    var lines=[];lines.push(j.message||"");
+    if(j.log)lines=lines.concat(j.log);
+    r.className=j.success?"ok":"er";
+    r.textContent=lines.join("\n");
+  }).catch(function(e){r.className="er";r.textContent="错误: "+e})
+}
+
+setTimeout(init,2000);
+</script>
+</body>
+</html>
