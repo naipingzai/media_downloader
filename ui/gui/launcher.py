@@ -1,42 +1,28 @@
-"""统一 GUI —— 基于 PyWebView。"""
+"""PySide6 GUI 启动器。"""
+import sys
 from pathlib import Path
 
-from shared.core import ROOT, PROJECT_NAME
-
-__all__ = ["launch"]
-
-GUI_INDEX = ROOT / "ui" / "gui" / "static" / "index.html"
-GUI_ICON = ROOT / "static" / "images" / "icon.png"
+ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def launch():
-    """启动 PyWebView GUI 窗口。"""
     try:
-        import webview
+        from PySide6.QtWidgets import QApplication
     except ImportError:
-        print("请安装 pywebview: pip install pywebview")
+        print("请安装 PySide6: pip install PySide6")
         return
 
-    if not GUI_INDEX.is_file():
-        print(f"GUI 入口文件不存在: {GUI_INDEX}")
-        return
+    app = QApplication(sys.argv)
+    app.setApplicationName("MediaDownloader")
 
-    from .backend import GuiBackend
+    from .resources.theme import apply_theme
+    apply_theme(app, dark=True)
 
-    backend = GuiBackend()
-    window = webview.create_window(
-        PROJECT_NAME,
-        str(GUI_INDEX),
-        width=1280,
-        height=720,
-        min_size=(960, 540),
-        resizable=True,
-        text_select=True,
-        js_api=backend,
-    )
-    backend._bind_window(window)
+    style_path = ROOT / "ui" / "gui" / "resources" / "styles.qss"
+    if style_path.is_file():
+        app.setStyleSheet(style_path.read_text(encoding="utf-8"))
 
-    try:
-        webview.start(icon=str(GUI_ICON) if GUI_ICON.is_file() else None)
-    finally:
-        backend.stop()
+    from .main_window import MainWindow
+    window = MainWindow()
+    window.show()
+    sys.exit(app.exec())

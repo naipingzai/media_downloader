@@ -1,7 +1,7 @@
 """MediaDownloader 统一入口。
 
 用法:
-    python main.py              # 默认启动 GUI (PyWebView)
+    python main.py              # 默认启动 GUI (PySide6)
     python main.py tui          # 启动 TUI (Textual)
     python main.py web          # 启动 Web UI (FastAPI + Uvicorn)
     python main.py api          # 启动纯 Web API (FastAPI)

@@ -10,3 +10,4 @@ rich>=15.0.0
 textual>=8.2.8
 uvicorn>=0.52.4
 pywebview>=6.2.1
+PySide6>=6.6
