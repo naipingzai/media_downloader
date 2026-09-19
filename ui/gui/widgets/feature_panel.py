@@ -1,14 +1,17 @@
-"""功能选择 + URL + 输出格式 + 存储模式 + 执行按钮。"""
-from PySide6.QtCore import Qt, Signal
+"""功能选择 + URL + 输出格式 + 编码 + 存储模式 + 执行按钮。"""
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QComboBox, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QVBoxLayout, QWidget,
 )
 from shared.core.ops import PlatformBus
+from shared.core.formats import (
+    ContainerFormat, VIDEO_CODECS, AUDIO_CODECS, OUTPUT_PROFILES,
+)
 
 
 class FeaturePanel(QWidget):
-    execute_clicked = Signal(str, str, str, str)
+    execute_clicked = Signal(str, str, str, str)  # feature_id, url, profile_key, storage
     preview_clicked = Signal(str)
 
     def __init__(self, parent=None):
@@ -40,29 +43,46 @@ class FeaturePanel(QWidget):
         layout.addLayout(r2)
 
         r3 = QHBoxLayout()
-        r3.addWidget(QLabel("输出:"))
-        self.output_combo = QComboBox()
-        self.output_combo.addItem("MP4 (视频)", "mp4")
-        self.output_combo.addItem("M4A (仅音频)", "m4a")
-        self.output_combo.addItem("JPG (图片)", "jpg")
-        self.output_combo.addItem("原始 (不处理)", "raw")
-        r3.addWidget(self.output_combo)
-        r3.addWidget(QLabel("存储:"))
+        r3.addWidget(QLabel("输出预设:"))
+        self.profile_combo = QComboBox()
+        for key, prof in OUTPUT_PROFILES.items():
+            self.profile_combo.addItem(prof.name, key)
+        r3.addWidget(self.profile_combo, 1)
+        layout.addLayout(r3)
+
+        r4 = QHBoxLayout()
+        r4.addWidget(QLabel("视频编码:"))
+        self.video_codec = QComboBox()
+        for key, vc in VIDEO_CODECS.items():
+            self.video_codec.addItem(vc.name, key)
+        self.video_codec.setCurrentText("直接复制 (不转码)")
+        r4.addWidget(self.video_codec, 1)
+        r4.addWidget(QLabel("音频编码:"))
+        self.audio_codec = QComboBox()
+        for key, ac in AUDIO_CODECS.items():
+            self.audio_codec.addItem(ac.name, key)
+        self.audio_codec.setCurrentText("直接复制")
+        r4.addWidget(self.audio_codec, 1)
+        layout.addLayout(r4)
+
+        r5 = QHBoxLayout()
+        r5.addWidget(QLabel("存储:"))
         self.storage_combo = QComboBox()
         self.storage_combo.addItem("直接存储", "flat")
         self.storage_combo.addItem("按作者分目录", "by_author")
         self.storage_combo.addItem("按日期分目录", "by_date")
         self.storage_combo.addItem("按类型分目录", "by_type")
-        r3.addWidget(self.storage_combo)
-        layout.addLayout(r3)
+        r5.addWidget(self.storage_combo)
+        r5.addStretch()
+        layout.addLayout(r5)
 
-        r4 = QHBoxLayout()
+        r6 = QHBoxLayout()
         self.exec_btn = QPushButton("执行")
         self.exec_btn.setObjectName("PrimaryButton")
         self.exec_btn.clicked.connect(self._on_execute)
-        r4.addWidget(self.exec_btn)
-        r4.addStretch()
-        layout.addLayout(r4)
+        r6.addWidget(self.exec_btn)
+        r6.addStretch()
+        layout.addLayout(r6)
 
     def set_features(self, features):
         self.fn_combo.clear()
@@ -74,8 +94,7 @@ class FeaturePanel(QWidget):
 
     def _on_feature_changed(self, index):
         fid = self.fn_combo.currentData()
-        if not fid:
-            return
+        if not fid: return
         features = PlatformBus.get_features(self._current_platform())
         meta = next((f for f in features if f.id == fid), None)
         if meta:
@@ -85,9 +104,11 @@ class FeaturePanel(QWidget):
     def _on_execute(self):
         fid = self.fn_combo.currentData()
         if fid:
-            self.execute_clicked.emit(fid, self.url_input.text(),
-                                      self.output_combo.currentData(),
-                                      self.storage_combo.currentData())
+            self.execute_clicked.emit(
+                fid, self.url_input.text(),
+                self.profile_combo.currentData(),
+                self.storage_combo.currentData(),
+            )
 
     def _current_platform(self):
         w = self.window()
