@@ -3,7 +3,7 @@ from PySide6.QtCore import Qt, QThreadPool
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QLineEdit,
-    QMainWindow, QScrollArea, QSplitter, QVBoxLayout, QWidget,
+    QMainWindow, QPushButton, QScrollArea, QSplitter, QVBoxLayout, QWidget,
 )
 from shared.core import PROJECT_NAME, VOLUME, __VERSION__
 from shared.core.config import ConfigManager
