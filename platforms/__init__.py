@@ -3,7 +3,7 @@ from importlib import import_module
 
 
 def load_all_platforms():
-    for name in ("douyin", "kuaishou", "xiaohongshu"):
+    for name in ("douyin", "kuaishou", "xiaohongshu", "bilibili"):
         try:
             import_module(f"platforms.{name}")
         except ImportError:

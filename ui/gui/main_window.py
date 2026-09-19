@@ -18,7 +18,7 @@ from .widgets.feature_panel import FeaturePanel
 from .widgets.video_info import VideoInfoWidget
 from .widgets.collect_result import CollectResultView
 from .widgets.result_view import ResultView
-from platforms import load_all_platforms
+from platforms import load_all_platforms, get_platform
 
 
 class MainWindow(QMainWindow):
@@ -242,4 +242,3 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(result.get("message", "完成"))
         else:
             self.statusBar().showMessage(f"失败: {result.get('message', '')}")
-from platforms import get_platform
