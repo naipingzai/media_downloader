@@ -66,8 +66,9 @@ class LoginDialog(QDialog):
         cookie_layout = QVBoxLayout(cookie_tab)
         if hint:
             cookie_layout.addWidget(QLabel(hint))
-        cookie_layout.addWidget(QLabel("从浏览器 DevTools → Application → Cookies 复制:
-或直接粘贴 SESSDATA / Cookie 字符串"))
+        cookie_layout.addWidget(QLabel("从浏览器 DevTools > Application > Cookies 复制, 或直接粘贴 SESSDATA/Cookie 字符串"))
+
+
         self._cookie_input = QTextEdit()
         self._cookie_input.setPlaceholderText("粘贴 Cookie 字符串...")
         self._cookie_input.setMaximumHeight(100)
