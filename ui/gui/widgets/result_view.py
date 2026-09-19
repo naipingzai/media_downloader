@@ -13,7 +13,10 @@ class ResultView(QWidget):
         layout.addWidget(title)
         self._log = QTextEdit()
         self._log.setReadOnly(True)
-        self._log.setStyleSheet("background: #0f172a; color: #e2e8f0; font-family: monospace; font-size: 12px; border: 1px solid #334155; border-radius: 4px;")
+        self._log.setStyleSheet(
+            "background: #0f172a; color: #e2e8f0; font-family: monospace; "
+            "font-size: 12px; border: 1px solid #334155; border-radius: 4px;"
+        )
         layout.addWidget(self._log)
 
     def append(self, text, color=None):
@@ -26,11 +29,17 @@ class ResultView(QWidget):
         self._log.clear()
 
     def set_result(self, result):
-        color = "#22c55e" if result.get("success") else "#ef4444"
-        self.append(f"--- {result.get('message', '')} ---", color)
+        success = result.get("success", False)
+        msg = result.get("message", "")
+        if success:
+            self.append(f"✓ {msg}", "#22c55e")
+        else:
+            self.append(f"✗ {msg}", "#ef4444")
         for line in result.get("log", []):
             self.append(line)
         if result.get("files"):
-            self.append(f"\n下载文件:", "#38bdf8")
+            self.append(f"\n下载文件 ({len(result['files'])}个):", "#38bdf8")
             for f in result["files"]:
                 self.append(f"  {f}")
+        if result.get("data") and not result.get("files"):
+            self.append(f"\n数据条目: {len(result['data'])}条", "#facc15")
