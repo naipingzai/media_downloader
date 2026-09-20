@@ -60,15 +60,9 @@ class BilibiliOps(PlatformOps):
                 dlc = create_async_client()
                 try:
                     dl = FileDownloader(client=dlc, save_dir=target.parent)
-                    for j, file_url in enumerate(urls):
-                        ext = "mp4"
-                        fname = f"{target.stem}.{ext}" if len(urls) == 1 else f"{target.stem}_{j+1}.{ext}"
-                        result = await dl.download_file(file_url, fname)
-                        if result:
-                            log.append(f"  ✓ {result}")
-                            files.append(str(result))
-                        else:
-                            log.append(f"  ✗ 下载失败")
+                    result = await self._dash_download(dl, urls, target, log)
+                    if result:
+                        files.append(result)
                 finally:
                     await dlc.close()
             return FeatureResult(True, f"处理 {len(links)} 个视频", log=log, files=files)
@@ -234,6 +228,37 @@ class BilibiliOps(PlatformOps):
         finally:
             await adapter.close()
 
+    # ── DASH 下载合并 ──
+    async def _dash_download(self, dl, urls: list, target, log: list) -> str | None:
+        """下载DASH流并合并。返回合并后文件路径。"""
+        if len(urls) >= 2:
+            log.append("  下载视频流...")
+            v = await dl.download_file(urls[0], f"{target.stem}_v.mp4")
+            log.append("  下载音频流...")
+            a = await dl.download_file(urls[1], f"{target.stem}_a.mp4")
+            if not v or not a:
+                log.append("  ✗ 下载失败"); return None
+            log.append("  合并音视频...")
+            from shared.core.ffmpeg import FFmpegManager
+            exe = FFmpegManager.find_executable()
+            if exe:
+                import subprocess
+                merged = str(target.with_suffix(".mp4"))
+                cmd = [str(exe), "-y", "-i", str(v), "-i", str(a),
+                       "-c:v", "copy", "-c:a", "aac", merged]
+                proc = subprocess.run(cmd, capture_output=True, timeout=120)
+                v.unlink(missing_ok=True)
+                a.unlink(missing_ok=True)
+                if proc.returncode == 0:
+                    return merged
+                log.append(f"  ✗ 合并失败")
+            else:
+                log.append("  ✗ FFmpeg未安装，保留分离文件")
+            return None
+        else:
+            result = await dl.download_file(urls[0], target.name)
+            return str(result) if result else None
+
     # ── 工具方法 ──
 
     def _extract_mid(self, url: str) -> str:
@@ -271,12 +296,9 @@ class BilibiliOps(PlatformOps):
             dlc = create_async_client()
             try:
                 dl = FileDownloader(client=dlc, save_dir=target.parent)
-                result = await dl.download_file(urls[0], target.name)
+                result = await self._dash_download(dl, urls, target, log)
+                if result:
+                    files.append(result)
             finally:
                 await dlc.close()
-            if result:
-                log.append(f"  ✓ {result}")
-                files.append(str(result))
-            else:
-                log.append("  ✗ 下载失败")
         return files

@@ -183,17 +183,21 @@ class SettingsDialog(QDialog):
         if path: self._ffmpeg.setText(path)
 
     def _save(self):
-        self._config.storage_mode = self._mode.currentData()
-        self._config.storage_format = self._fmt.currentData()
-        self._config.dedup = self._dedup.isChecked()
-        self._config.default_profile = self._profile.currentData()
-        self._config.default_video_codec = self._vcodec.currentData()
-        self._config.default_audio_codec = self._acodec.currentData()
-        self._config.default_image_format = self._img_fmt.currentData()
-        self._config.download_danmaku = self._dl_danmaku.isChecked()
-        self._config.download_subtitle = self._dl_subtitle.isChecked()
-        self._config.download_cover = self._dl_cover.isChecked()
-        self._config.download_metadata = self._dl_metadata.isChecked()
-        self._config.ffmpeg_path = self._ffmpeg.text().strip()
-        ConfigManager.save(self._config)
-        self.accept()
+        try:
+            self._config.storage_mode = self._mode.currentData() or "flat"
+            self._config.storage_format = self._fmt.currentData() or "json"
+            self._config.dedup = self._dedup.isChecked()
+            self._config.default_profile = self._profile.currentData() or "mp4_copy"
+            self._config.default_video_codec = self._vcodec.currentData() or "copy"
+            self._config.default_audio_codec = self._acodec.currentData() or "copy"
+            self._config.default_image_format = self._img_fmt.currentData() or "png"
+            self._config.download_danmaku = self._dl_danmaku.isChecked()
+            self._config.download_subtitle = self._dl_subtitle.isChecked()
+            self._config.download_cover = self._dl_cover.isChecked()
+            self._config.download_metadata = self._dl_metadata.isChecked()
+            self._config.ffmpeg_path = self._ffmpeg.text().strip()
+            ConfigManager.save(self._config)
+            self.accept()
+        except Exception as e:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "保存失败", str(e))
