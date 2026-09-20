@@ -149,14 +149,22 @@ class SettingsDialog(QDialog):
         form.addRow(lbl_ff)
 
         ff_row = QHBoxLayout()
-        self._ffmpeg = QLineEdit(self._config.ffmpeg_path)
+        ffmpeg_display = self._config.ffmpeg_path
+        if not ffmpeg_display:
+            exe = FFmpegManager.find_executable()
+            ffmpeg_display = str(exe) if exe else ""
+        self._ffmpeg = QLineEdit(ffmpeg_display)
+        self._ffmpeg.setPlaceholderText("自动检测系统 FFmpeg 或手动输入路径")
         ff_row.addWidget(self._ffmpeg, 1)
         browse = QPushButton("浏览...")
         browse.clicked.connect(self._browse)
         ff_row.addWidget(browse)
         form.addRow("路径:", ff_row)
 
-        ok, msg = FFmpegManager.check_available(self._config.ffmpeg_path or None)
+        try:
+            ok, msg = FFmpegManager.check_available(self._config.ffmpeg_path or None)
+        except Exception:
+            ok, msg = False, "FFmpeg 检测超时"
         status = QLabel(f"{'✓ ' + msg if ok else '✗ ' + msg}")
         status.setStyleSheet(f"color: {'#22c55e' if ok else '#ef4444'}; font-size: 11px;")
         form.addRow("", status)
