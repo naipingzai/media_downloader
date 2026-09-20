@@ -1,4 +1,5 @@
-"""主窗口 — 融合 bilibili-downloader 设计。"""
+"""主窗口 — 无菜单栏，所有功能整合到侧边栏+主页。"""
+import subprocess, sys
 from PySide6.QtCore import Qt, QThreadPool
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
@@ -26,13 +27,13 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"{PROJECT_NAME}")
         self.setMinimumSize(900, 640)
         self.resize(1280, 860)
+        self.menuBar().setVisible(False)
         load_all_platforms()
         self._cm = CookieManager()
         self._current_platform = ""
         self._pool = QThreadPool()
         self._pool.setMaxThreadCount(2)
         self._setup_ui()
-        self._setup_menu()
         self._setup_status_bar()
 
     def _setup_ui(self):
@@ -49,6 +50,7 @@ class MainWindow(QMainWindow):
         sb = QVBoxLayout(sidebar)
         sb.setContentsMargins(18, 22, 18, 18)
         sb.setSpacing(10)
+
         brand_title = QLabel("MediaDownloader")
         brand_title.setObjectName("BrandTitle")
         brand_caption = QLabel("多平台媒体下载")
@@ -56,6 +58,7 @@ class MainWindow(QMainWindow):
         sb.addWidget(brand_title)
         sb.addWidget(brand_caption)
         sb.addSpacing(16)
+
         section = QLabel("PLATFORMS")
         section.setObjectName("NavSection")
         sb.addWidget(section)
@@ -66,11 +69,18 @@ class MainWindow(QMainWindow):
             btn.clicked.connect(lambda checked, p=pid: self._select_platform(p))
             sb.addWidget(btn)
             self._platform_btns.append(btn)
+
         sb.addSpacing(8)
         settings_btn = QPushButton("  设置")
         settings_btn.setObjectName("NavButton")
         settings_btn.clicked.connect(self._open_settings)
         sb.addWidget(settings_btn)
+
+        open_dir_btn = QPushButton("  打开下载目录")
+        open_dir_btn.setObjectName("NavButton")
+        open_dir_btn.clicked.connect(self._open_download_dir)
+        sb.addWidget(open_dir_btn)
+
         sb.addSpacing(8)
         info_card = QFrame()
         info_card.setObjectName("InfoCard")
@@ -85,7 +95,12 @@ class MainWindow(QMainWindow):
         ic.addWidget(info_title)
         ic.addWidget(info_text)
         sb.addWidget(info_card)
+
         sb.addStretch()
+        version_label = QLabel(f"v{__VERSION__}")
+        version_label.setObjectName("Caption")
+        sb.addWidget(version_label)
+        sb.addSpacing(4)
         self._login_btn = QPushButton("登录 / Cookie")
         self._login_btn.setObjectName("SidebarAction")
         self._login_btn.clicked.connect(self._open_login)
@@ -103,12 +118,11 @@ class MainWindow(QMainWindow):
         ht = QVBoxLayout()
         ht.setSpacing(2)
         ht.addWidget(QLabel("下载控制台"))
-        page_sub = QLabel("融合 bilibili-downloader 设计，支持多平台媒体下载")
+        page_sub = QLabel("融合多平台媒体下载")
         page_sub.setObjectName("Caption")
         ht.addWidget(page_sub)
         header.addLayout(ht)
         header.addStretch()
-
         wl.addLayout(header)
 
         hero = HeroPanel(workspace)
@@ -116,8 +130,8 @@ class MainWindow(QMainWindow):
         hl.setContentsMargins(28, 24, 28, 26)
         self._hero_title = QLabel("MediaDownloader")
         self._hero_title.setObjectName("HeroTitle")
-        self._hero_sub = QLabel("选择平台开始使用")
-        self._hero_sub.setStyleSheet("color: #94a3b8; font-size: 13px;")
+        self._hero_sub = QLabel("选择平台开始")
+        self._hero_sub.setObjectName("Caption")
         hl.addWidget(self._hero_title)
         hl.addWidget(self._hero_sub)
         hl.addStretch()
@@ -162,16 +176,6 @@ class MainWindow(QMainWindow):
 
         shell.addWidget(workspace, 1)
 
-    def _setup_menu(self):
-        mb = self.menuBar()
-        file_menu = mb.addMenu("文件")
-        file_menu.addSeparator()
-        file_menu.addAction("退出", self.close)
-        view_menu = mb.addMenu("视图")
-        view_menu.addAction("打开下载目录", self._open_download_dir)
-        help_menu = mb.addMenu("帮助")
-        help_menu.addAction("关于", lambda: self.statusBar().showMessage(f"{PROJECT_NAME} v{__VERSION__}"))
-
     def _setup_status_bar(self):
         self._status_platform = QLabel("")
         self._status_feature = QLabel("")
@@ -214,7 +218,6 @@ class MainWindow(QMainWindow):
         SettingsDialog(self).exec()
 
     def _open_download_dir(self):
-        import subprocess, sys
         path = str(VOLUME)
         if sys.platform == "darwin": subprocess.Popen(["open", path])
         elif sys.platform == "win32": subprocess.Popen(["explorer", path])
