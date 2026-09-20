@@ -3,8 +3,8 @@ import subprocess, sys
 from PySide6.QtCore import Qt, QThreadPool
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QLineEdit,
-    QMainWindow, QPushButton, QScrollArea, QVBoxLayout, QWidget,
+    QCheckBox, QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel,
+    QLineEdit, QMainWindow, QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
 from shared.core import PROJECT_NAME, VOLUME, __VERSION__
 from shared.core.config import ConfigManager
@@ -131,30 +131,30 @@ class MainWindow(QMainWindow):
         hl.addStretch()
         wl.addWidget(hero)
 
-        content_row = QHBoxLayout()
-        content_row.setSpacing(16)
+        content_grid = QGridLayout()
+        content_grid.setSpacing(16)
 
-        left_col = QVBoxLayout()
-        left_col.setSpacing(8)
+        # 左列
         self._video_info = VideoInfoWidget(workspace)
-        left_col.addWidget(self._video_info)
         self._feature_panel = FeaturePanel(workspace)
         self._feature_panel.execute_clicked.connect(self._on_execute)
         self._feature_panel.preview_clicked.connect(self._on_preview)
-        left_col.addWidget(self._feature_panel)
-        left_col.addStretch()
-        content_row.addLayout(left_col, 5)
 
-        right_col = QVBoxLayout()
-        right_col.setSpacing(8)
+        # 右列
         self._collect_result = CollectResultView(workspace)
-        right_col.addWidget(self._collect_result)
         self._result_view = ResultView(workspace)
-        right_col.addWidget(self._result_view)
-        right_col.addStretch()
-        content_row.addLayout(right_col, 5)
 
-        wl.addLayout(content_row)
+        # 第0行: 作品资料卡 | 采集结果
+        content_grid.addWidget(self._video_info, 0, 0)
+        content_grid.addWidget(self._collect_result, 0, 1)
+        # 第1行: 功能与参数 | 执行日志
+        content_grid.addWidget(self._feature_panel, 1, 0)
+        content_grid.addWidget(self._result_view, 1, 1)
+
+        content_grid.setRowStretch(0, 1)
+        content_grid.setRowStretch(1, 1)
+
+        wl.addLayout(content_grid)
 
         qh = QHBoxLayout()
         qh.addWidget(QLabel("任务队列"))
