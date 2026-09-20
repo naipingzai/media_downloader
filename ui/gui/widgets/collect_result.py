@@ -12,20 +12,22 @@ class CollectResultView(QWidget):
         layout.setContentsMargins(16, 14, 16, 14)
         self._title = QLabel("采集结果")
         self._title.setObjectName("SectionTitle")
+        self._title.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         layout.addWidget(self._title)
         self._table = QTableWidget(self)
         self._table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self._table.setEditTriggers(QTableWidget.NoEditTriggers)
         self._table.setSelectionBehavior(QTableWidget.SelectRows)
         self._table.verticalHeader().setVisible(False)
-        self._table.setMinimumHeight(0)
-        self._table.setMaximumHeight(16777215)
+        self._table.setColumnCount(1)
+        self._table.setRowCount(0)
+        self._table.setHorizontalHeaderLabels(["暂无数据"])
         self._table.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         layout.addWidget(self._table)
 
     def show_data(self, title, headers, rows):
         self._title.setText(title)
-        self._table.setVisible(True)
+        self._table.setRowCount(0)
         self._table.setColumnCount(len(headers))
         self._table.setHorizontalHeaderLabels(headers)
         self._table.setRowCount(len(rows))
@@ -34,7 +36,9 @@ class CollectResultView(QWidget):
                 self._table.setItem(i, j, QTableWidgetItem(str(val)))
 
     def show_empty(self):
-        self._table.setVisible(False)
+        self._table.setRowCount(0)
+        self._table.setColumnCount(1)
+        self._table.setHorizontalHeaderLabels(["暂无数据"])
         self._title.setText("采集结果")
 
     def show_hot_list(self, data):

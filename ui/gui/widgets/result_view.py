@@ -12,6 +12,7 @@ class ResultView(QWidget):
         layout.setContentsMargins(16, 14, 16, 14)
         title = QLabel("执行日志")
         title.setObjectName("SectionTitle")
+        title.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         layout.addWidget(title)
         self._log = QTextEdit()
         self._log.setReadOnly(True)
