@@ -1,5 +1,5 @@
 """功能选择 + URL + 下载选项 + 执行（格式/编码/存储全部移到设置）。"""
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QVBoxLayout, QWidget,
@@ -18,8 +18,7 @@ class FeaturePanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("Panel")
-        from PySide6.QtCore import Qt as _Qt
-        self.setAttribute(_Qt.WA_StyledBackground, True)
+        self.setAttribute(Qt.WA_StyledBackground, True)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 12, 16, 12)
         layout.setSpacing(8)

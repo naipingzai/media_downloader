@@ -130,236 +130,266 @@ class BilibiliAdapter(PlatformAdapter):
 
     # ── 扩展 API 方法 ──
 
+    @staticmethod
+    def _sj(resp):
+        """safe json"""
+        try:
+            d = resp.json()
+            return d if isinstance(d, dict) else {}
+        except Exception:
+            return {}
+
+    @staticmethod
+    def _jget(d, *keys):
+        """safe chained dict.get"""
+        for k in keys:
+            if not isinstance(d, dict):
+                return None
+            d = d.get(k)
+        return d
+
     async def fetch_playurl(self, bvid: str) -> list[str]:
         """获取视频下载地址。"""
         if not bvid:
             return []
-        from curl_cffi.requests import AsyncSession
-        async with AsyncSession(impersonate=IMPERSONATE) as c:
-            await self._ensure_wbi(c)
-            # 先获取 cid
-            params = {"bvid": bvid}
-            if self._img_key and self._sub_key:
-                params = _wbi_sign(params, self._img_key, self._sub_key)
-            h = {"User-Agent": USERAGENT, "Referer": "https://www.bilibili.com/"}
-            if self.cookie:
-                h["Cookie"] = f"SESSDATA={self.cookie}"
-            r = await c.get(VIEW_URL, params=params, headers=h, proxy=self.proxy)
-            if r.status_code != 200:
+        try:
+            from curl_cffi.requests import AsyncSession
+            async with AsyncSession(impersonate=IMPERSONATE) as c:
+                await self._ensure_wbi(c)
+                params = {"bvid": bvid}
+                if self._img_key and self._sub_key:
+                    params = _wbi_sign(params, self._img_key, self._sub_key)
+                h = {"User-Agent": USERAGENT, "Referer": "https://www.bilibili.com/"}
+                if self.cookie:
+                    h["Cookie"] = f"SESSDATA={self.cookie}"
+                r = await c.get(VIEW_URL, params=params, headers=h, proxy=self.proxy)
+                if r.status_code != 200:
+                    return []
+                data = self._sj(r)
+                if data.get("code") != 0:
+                    return []
+                cid = self._jget(data, "data", "cid")
+                if not cid:
+                    return []
+                play_params = {
+                    "bvid": bvid, "cid": cid,
+                    "qn": "80", "fnval": "16", "fourk": "1",
+                }
+                if self._img_key and self._sub_key:
+                    play_params = _wbi_sign(play_params, self._img_key, self._sub_key)
+                r2 = await c.get(PLAYURL_URL, params=play_params, headers=h, proxy=self.proxy)
+                if r2.status_code != 200:
+                    return []
+                pdata = self._jget(self._sj(r2), "data") or {}
+                dash = pdata.get("dash")
+                if dash:
+                    video_list = dash.get("video") or []
+                    audio_list = dash.get("audio") or []
+                    if video_list:
+                        best_video = max(video_list, key=lambda x: x.get("bandwidth", 0))
+                        urls = [best_video.get("baseUrl") or best_video.get("base_url") or ""]
+                        if audio_list:
+                            best_audio = max(audio_list, key=lambda x: x.get("bandwidth", 0))
+                            urls.append(best_audio.get("baseUrl") or best_audio.get("base_url") or "")
+                        return [u for u in urls if u]
+                durl = pdata.get("durl")
+                if durl:
+                    return [d.get("url", "") for d in durl if d.get("url")]
                 return []
-            data = r.json()
-            if data.get("code") != 0:
-                return []
-            cid = data["data"].get("cid", 0)
-            if not cid:
-                return []
-            # 获取 playurl
-            play_params = {
-                "bvid": bvid, "cid": cid,
-                "qn": "80", "fnval": "16", "fourk": "1",
-            }
-            if self._img_key and self._sub_key:
-                play_params = _wbi_sign(play_params, self._img_key, self._sub_key)
-            r2 = await c.get(PLAYURL_URL, params=play_params, headers=h, proxy=self.proxy)
-            if r2.status_code != 200:
-                return []
-            pdata = r2.json().get("data", {})
-            # DASH 格式
-            dash = pdata.get("dash")
-            if dash:
-                video_list = dash.get("video", [])
-                audio_list = dash.get("audio", [])
-                if video_list:
-                    # 选最高质量
-                    best_video = max(video_list, key=lambda x: x.get("bandwidth", 0))
-                    urls = [best_video.get("baseUrl", "") or best_video.get("base_url", "")]
-                    if audio_list:
-                        best_audio = max(audio_list, key=lambda x: x.get("bandwidth", 0))
-                        urls.append(best_audio.get("baseUrl", "") or best_audio.get("base_url", ""))
-                    return [u for u in urls if u]
-            # durl 格式
-            durl = pdata.get("durl")
-            if durl:
-                return [d.get("url", "") for d in durl if d.get("url")]
+        except Exception:
             return []
 
     async def fetch_user_videos(self, mid: str, max_count: int = 30) -> list[dict]:
         """获取用户视频列表。"""
-        from curl_cffi.requests import AsyncSession
-        async with AsyncSession(impersonate=IMPERSONATE) as c:
-            await self._ensure_wbi(c)
-            h = {"User-Agent": USERAGENT, "Referer": "https://www.bilibili.com/"}
-            if self.cookie:
-                h["Cookie"] = f"SESSDATA={self.cookie}"
-            videos = []
-            pn = 1
-            while len(videos) < max_count:
-                params = {"mid": mid, "ps": "30", "pn": str(pn), "order": "pubdate"}
-                if self._img_key and self._sub_key:
-                    params = _wbi_sign(params, self._img_key, self._sub_key)
-                url = f"{BASE_URL}/x/space/wbi/arc/search"
-                r = await c.get(url, params=params, headers=h, proxy=self.proxy)
-                if r.status_code != 200:
-                    break
-                data = r.json().get("data", {})
-                vlist = data.get("list", {}).get("vlist", [])
-                if not vlist:
-                    break
-                videos.extend(vlist)
-                total = data.get("page", {}).get("count", 0)
-                if len(videos) >= total or len(videos) >= max_count:
-                    break
-                pn += 1
-            return videos[:max_count]
+        try:
+            from curl_cffi.requests import AsyncSession
+            async with AsyncSession(impersonate=IMPERSONATE) as c:
+                await self._ensure_wbi(c)
+                h = {"User-Agent": USERAGENT, "Referer": "https://www.bilibili.com/"}
+                if self.cookie:
+                    h["Cookie"] = f"SESSDATA={self.cookie}"
+                videos = []
+                pn = 1
+                while len(videos) < max_count:
+                    params = {"mid": mid, "ps": "30", "pn": str(pn), "order": "pubdate"}
+                    if self._img_key and self._sub_key:
+                        params = _wbi_sign(params, self._img_key, self._sub_key)
+                    url = f"{BASE_URL}/x/space/wbi/arc/search"
+                    r = await c.get(url, params=params, headers=h, proxy=self.proxy)
+                    if r.status_code != 200:
+                        break
+                    data = self._sj(r)
+                    vlist = self._jget(data, "data", "list", "vlist") or []
+                    if not vlist:
+                        break
+                    videos.extend(vlist)
+                    total = self._jget(data, "data", "page", "count") or 0
+                    if len(videos) >= total or len(videos) >= max_count:
+                        break
+                    pn += 1
+                return videos[:max_count]
+        except Exception:
+            return []
 
     async def fetch_series_list(self, mid: str) -> list[dict]:
         """获取用户的合集/系列列表。"""
-        from curl_cffi.requests import AsyncSession
-        async with AsyncSession(impersonate=IMPERSONATE) as c:
-            await self._ensure_wbi(c)
-            h = {"User-Agent": USERAGENT, "Referer": "https://www.bilibili.com/"}
-            if self.cookie:
-                h["Cookie"] = f"SESSDATA={self.cookie}"
-            # 获取用户合集
-            params = {"mid": mid, "ps": "20", "pn": "1"}
-            if self._img_key and self._sub_key:
-                params = _wbi_sign(params, self._img_key, self._sub_key)
-            url = f"{BASE_URL}/x/polymer/web-space/seasons_series_list"
-            r = await c.get(url, params=params, headers=h, proxy=self.proxy)
-            if r.status_code != 200:
-                return []
-            items = r.json().get("data", {}).get("items_lists", {})
-            seasons = items.get("seasons_list", [])
-            series = items.get("series_list", [])
-            result = []
-            for s in seasons:
-                meta = s.get("meta", {})
-                meta["type"] = "season"
-                result.append({"meta": meta})
-            for s in series:
-                meta = s.get("meta", {})
-                meta["type"] = "series"
-                result.append({"meta": meta})
-            return result
+        try:
+            from curl_cffi.requests import AsyncSession
+            async with AsyncSession(impersonate=IMPERSONATE) as c:
+                await self._ensure_wbi(c)
+                h = {"User-Agent": USERAGENT, "Referer": "https://www.bilibili.com/"}
+                if self.cookie:
+                    h["Cookie"] = f"SESSDATA={self.cookie}"
+                params = {"mid": mid, "ps": "20", "pn": "1"}
+                if self._img_key and self._sub_key:
+                    params = _wbi_sign(params, self._img_key, self._sub_key)
+                url = f"{BASE_URL}/x/polymer/web-space/seasons_series_list"
+                r = await c.get(url, params=params, headers=h, proxy=self.proxy)
+                if r.status_code != 200:
+                    return []
+                items = self._jget(self._sj(r), "data", "items_lists") or {}
+                seasons = items.get("seasons_list") or []
+                series = items.get("series_list") or []
+                result = []
+                for s in seasons:
+                    meta = s.get("meta", {})
+                    meta["type"] = "season"
+                    result.append({"meta": meta})
+                for s in series:
+                    meta = s.get("meta", {})
+                    meta["type"] = "series"
+                    result.append({"meta": meta})
+                return result
+        except Exception:
+            return []
 
     async def fetch_series_archives(self, mid: str, sid: int) -> list[dict]:
         """获取合集/系列视频列表。"""
-        from curl_cffi.requests import AsyncSession
-        async with AsyncSession(impersonate=IMPERSONATE) as c:
-            await self._ensure_wbi(c)
-            h = {"User-Agent": USERAGENT, "Referer": "https://www.bilibili.com/"}
-            if self.cookie:
-                h["Cookie"] = f"SESSDATA={self.cookie}"
-            params = {"mid": mid, "series_id": str(sid), "ps": "30", "pn": "1"}
-            if self._img_key and self._sub_key:
-                params = _wbi_sign(params, self._img_key, self._sub_key)
-            r = await c.get(SERIES_URL, params=params, headers=h, proxy=self.proxy)
-            if r.status_code != 200:
-                return []
-            return r.json().get("data", {}).get("archives", [])
+        try:
+            from curl_cffi.requests import AsyncSession
+            async with AsyncSession(impersonate=IMPERSONATE) as c:
+                await self._ensure_wbi(c)
+                h = {"User-Agent": USERAGENT, "Referer": "https://www.bilibili.com/"}
+                if self.cookie:
+                    h["Cookie"] = f"SESSDATA={self.cookie}"
+                params = {"mid": mid, "series_id": str(sid), "ps": "30", "pn": "1"}
+                if self._img_key and self._sub_key:
+                    params = _wbi_sign(params, self._img_key, self._sub_key)
+                r = await c.get(SERIES_URL, params=params, headers=h, proxy=self.proxy)
+                if r.status_code != 200:
+                    return []
+                return self._jget(self._sj(r), "data", "archives") or []
+        except Exception:
+            return []
 
     async def fetch_favorite_list(self, fid: str = "0") -> list[dict]:
         """获取收藏夹内容列表。"""
-        from curl_cffi.requests import AsyncSession
-        async with AsyncSession(impersonate=IMPERSONATE) as c:
-            await self._ensure_wbi(c)
-            h = {"User-Agent": USERAGENT, "Referer": "https://www.bilibili.com/"}
-            if self.cookie:
-                h["Cookie"] = f"SESSDATA={self.cookie}"
-            # 先获取默认收藏夹
-            if fid == "0":
-                fav_params = {"up_mid": ""}
-                if self._img_key and self._sub_key:
-                    fav_params = _wbi_sign(fav_params, self._img_key, self._sub_key)
-                r0 = await c.get(f"{BASE_URL}/x/v3/fav/folder/created/list-all",
-                                 params=fav_params, headers=h, proxy=self.proxy)
-                if r0.status_code == 200:
-                    folders = r0.json().get("data", {}).get("list", [])
-                    if folders:
-                        fid = str(folders[0].get("id", "0"))
-            # 获取收藏夹内容
-            all_items = []
-            pn = 1
-            while True:
-                params = {"media_id": fid, "pn": str(pn), "ps": "20", "order": "mtime"}
-                if self._img_key and self._sub_key:
-                    params = _wbi_sign(params, self._img_key, self._sub_key)
-                r = await c.get(FAVORITE_URL, params=params, headers=h, proxy=self.proxy)
-                if r.status_code != 200:
-                    break
-                data = r.json().get("data", {})
-                medias = data.get("medias") or []
-                if not medias:
-                    break
-                all_items.extend(medias)
-                if not data.get("has_more", False):
-                    break
-                pn += 1
-            return all_items
+        try:
+            from curl_cffi.requests import AsyncSession
+            async with AsyncSession(impersonate=IMPERSONATE) as c:
+                await self._ensure_wbi(c)
+                h = {"User-Agent": USERAGENT, "Referer": "https://www.bilibili.com/"}
+                if self.cookie:
+                    h["Cookie"] = f"SESSDATA={self.cookie}"
+                if fid == "0":
+                    fav_params = {"up_mid": ""}
+                    if self._img_key and self._sub_key:
+                        fav_params = _wbi_sign(fav_params, self._img_key, self._sub_key)
+                    r0 = await c.get(f"{BASE_URL}/x/v3/fav/folder/created/list-all",
+                                     params=fav_params, headers=h, proxy=self.proxy)
+                    if r0.status_code == 200:
+                        folders = self._jget(self._sj(r0), "data", "list") or []
+                        if folders:
+                            fid = str(folders[0].get("id", "0"))
+                all_items = []
+                pn = 1
+                while True:
+                    params = {"media_id": fid, "pn": str(pn), "ps": "20", "order": "mtime"}
+                    if self._img_key and self._sub_key:
+                        params = _wbi_sign(params, self._img_key, self._sub_key)
+                    r = await c.get(FAVORITE_URL, params=params, headers=h, proxy=self.proxy)
+                    if r.status_code != 200:
+                        break
+                    data = self._sj(r)
+                    medias = self._jget(data, "data", "medias") or []
+                    if not medias:
+                        break
+                    all_items.extend(medias)
+                    if not data.get("data", {}).get("has_more", False):
+                        break
+                    pn += 1
+                return all_items
+        except Exception:
+            return []
 
     async def fetch_comments(self, bvid: str, cid: int, max_count: int = 50) -> list[dict]:
         """采集视频评论。"""
-        from curl_cffi.requests import AsyncSession
-        # 获取 aid
-        aid = 0
-        async with AsyncSession(impersonate=IMPERSONATE) as c:
-            h = {"User-Agent": USERAGENT, "Referer": "https://www.bilibili.com/"}
-            if self.cookie:
-                h["Cookie"] = f"SESSDATA={self.cookie}"
-            params = {"bvid": bvid}
-            if self._img_key and self._sub_key:
-                params = _wbi_sign(params, self._img_key, self._sub_key)
-            r = await c.get(VIEW_URL, params=params, headers=h, proxy=self.proxy)
-            if r.status_code == 200:
-                aid = r.json().get("data", {}).get("aid", 0)
-        if not aid:
+        try:
+            from curl_cffi.requests import AsyncSession
+            aid = 0
+            async with AsyncSession(impersonate=IMPERSONATE) as c:
+                h = {"User-Agent": USERAGENT, "Referer": "https://www.bilibili.com/"}
+                if self.cookie:
+                    h["Cookie"] = f"SESSDATA={self.cookie}"
+                params = {"bvid": bvid}
+                if self._img_key and self._sub_key:
+                    params = _wbi_sign(params, self._img_key, self._sub_key)
+                r = await c.get(VIEW_URL, params=params, headers=h, proxy=self.proxy)
+                if r.status_code == 200:
+                    aid = self._jget(self._sj(r), "data", "aid") or 0
+            if not aid:
+                return []
+            comments = []
+            next_offset = ""
+            async with AsyncSession(impersonate=IMPERSONATE) as c:
+                h = {"User-Agent": USERAGENT, "Referer": "https://www.bilibili.com/"}
+                if self.cookie:
+                    h["Cookie"] = f"SESSDATA={self.cookie}"
+                while len(comments) < max_count:
+                    url = f"{BASE_URL}/x/v2/reply/main"
+                    params = {"oid": str(aid), "type": "1", "mode": "3"}
+                    if next_offset:
+                        params["next"] = next_offset
+                    r = await c.get(url, params=params, headers=h, proxy=self.proxy)
+                    if r.status_code != 200:
+                        break
+                    data = self._sj(r)
+                    cursor = self._jget(data, "data", "cursor") or {}
+                    replies = self._jget(data, "data", "replies") or []
+                    if not replies:
+                        break
+                    comments.extend(replies)
+                    next_offset = str(cursor.get("next", ""))
+                    if not cursor.get("is_end", False):
+                        continue
+                    break
+            return comments[:max_count]
+        except Exception:
             return []
-        comments = []
-        next_offset = ""
-        async with AsyncSession(impersonate=IMPERSONATE) as c:
-            h = {"User-Agent": USERAGENT, "Referer": "https://www.bilibili.com/"}
-            if self.cookie:
-                h["Cookie"] = f"SESSDATA={self.cookie}"
-            while len(comments) < max_count:
-                url = f"{BASE_URL}/x/v2/reply/main"
-                params = {"oid": str(aid), "type": "1", "mode": "3"}
-                if next_offset:
-                    params["next"] = next_offset
-                r = await c.get(url, params=params, headers=h, proxy=self.proxy)
-                if r.status_code != 200:
-                    break
-                data = r.json().get("data", {})
-                cursor = data.get("cursor", {})
-                replies = data.get("replies") or []
-                if not replies:
-                    break
-                comments.extend(replies)
-                next_offset = str(cursor.get("next", ""))
-                if not cursor.get("is_end", False):
-                    continue
-                break
-        return comments[:max_count]
 
     async def fetch_user_info(self, mid: str) -> dict:
         """获取用户资料。"""
-        from curl_cffi.requests import AsyncSession
-        async with AsyncSession(impersonate=IMPERSONATE) as c:
-            h = {"User-Agent": USERAGENT, "Referer": "https://www.bilibili.com/"}
-            if self.cookie:
-                h["Cookie"] = f"SESSDATA={self.cookie}"
-            params = {"mid": mid}
-            if self._img_key and self._sub_key:
-                params = _wbi_sign(params, self._img_key, self._sub_key)
-            r = await c.get(f"{BASE_URL}/x/web-interface/card", params=params, headers=h, proxy=self.proxy)
-            if r.status_code != 200:
-                return {}
-            card = r.json().get("data", {}).get("card", {})
-            if not card:
-                return {}
-            return {
-                "name": card.get("name", ""),
-                "fans": card.get("fans", 0),
-                "following": card.get("attention", 0),
-                "sign": card.get("sign", ""),
-                "level": card.get("level", 0),
-            }
+        try:
+            from curl_cffi.requests import AsyncSession
+            async with AsyncSession(impersonate=IMPERSONATE) as c:
+                h = {"User-Agent": USERAGENT, "Referer": "https://www.bilibili.com/"}
+                if self.cookie:
+                    h["Cookie"] = f"SESSDATA={self.cookie}"
+                params = {"mid": mid}
+                if self._img_key and self._sub_key:
+                    params = _wbi_sign(params, self._img_key, self._sub_key)
+                r = await c.get(f"{BASE_URL}/x/web-interface/card", params=params, headers=h, proxy=self.proxy)
+                if r.status_code != 200:
+                    return {}
+                card = self._jget(self._sj(r), "data", "card") or {}
+                if not card:
+                    return {}
+                return {
+                    "name": card.get("name", ""),
+                    "fans": card.get("fans", 0),
+                    "following": card.get("attention", 0),
+                    "sign": card.get("sign", ""),
+                    "level": card.get("level", 0),
+                }
+        except Exception:
+            return {}
