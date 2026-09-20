@@ -206,7 +206,6 @@ class MainWindow(QMainWindow):
 
     def _select_platform(self, platform):
         self._current_platform = platform
-        for btn in self._platform_btns:
         features = PlatformBus.get_features(platform)
         self._feature_panel.set_features(features)
         self._hero_title.setText(platform.title())
