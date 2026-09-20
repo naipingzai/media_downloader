@@ -1,4 +1,5 @@
 """执行日志输出。"""
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QTextEdit, QVBoxLayout, QWidget
 
 
@@ -6,6 +7,7 @@ class ResultView(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("Panel")
+        self.setAttribute(Qt.WA_StyledBackground, True)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 14, 16, 14)
         title = QLabel("执行日志")

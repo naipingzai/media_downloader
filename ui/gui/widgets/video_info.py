@@ -7,6 +7,7 @@ class VideoInfoWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("Panel")
+        self.setAttribute(Qt.WA_StyledBackground, True)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 14, 16, 14)
         layout.setSpacing(8)
