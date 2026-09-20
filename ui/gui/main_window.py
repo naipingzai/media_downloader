@@ -138,10 +138,10 @@ class MainWindow(QMainWindow):
 
         right_col = QVBoxLayout()
         right_col.setSpacing(8)
-        self._result_view = ResultView(workspace)
-        right_col.addWidget(self._result_view, 2)
         self._collect_result = CollectResultView(workspace)
         right_col.addWidget(self._collect_result, 1)
+        self._result_view = ResultView(workspace)
+        right_col.addWidget(self._result_view, 2)
         content_row.addLayout(right_col, 5)
 
         wl.addLayout(content_row, 1)

@@ -11,11 +11,13 @@ class VideoInfoWidget(QWidget):
         layout.setContentsMargins(16, 14, 16, 14)
         layout.setSpacing(8)
         header = QHBoxLayout()
-        header.addWidget(QLabel("作品资料卡"))
-        self._state = QLabel("等待解析")
-        self._state.setObjectName("StatusPill")
-        header.addStretch()
+        header.setSpacing(6)
+        self._title_label = QLabel("作品资料卡")
+        header.addWidget(self._title_label)
+        self._state = QLabel("(等待解析)")
+        self._state.setObjectName("Caption")
         header.addWidget(self._state)
+        header.addStretch()
         layout.addLayout(header)
         self._info = QLabel("输入链接后点击 解析预览 查看作品信息")
         self._info.setWordWrap(True)
@@ -27,8 +29,8 @@ class VideoInfoWidget(QWidget):
         layout.addWidget(self._detail)
 
     def show_work(self, work):
-        self._state.setText("已解析")
-        self._state.setStyleSheet("background: #22c55e; color: white; border-radius: 10px; padding: 2px 8px;")
+        self._state.setText("(已解析)")
+        self._state.setStyleSheet("color: #22c55e; font-weight: bold;")
         lines = [
             f"标题: {work.get('title', '')}",
             f"作者: {work.get('author_name', '')}",
@@ -43,14 +45,14 @@ class VideoInfoWidget(QWidget):
         self._info.setVisible(False)
 
     def show_empty(self):
-        self._state.setText("等待解析")
-        self._state.setStyleSheet("background: #64748b; color: white; border-radius: 10px; padding: 2px 8px;")
+        self._state.setText("(等待解析)")
+        self._state.setStyleSheet("color: #64748b;")
         self._detail.setVisible(False)
         self._info.setVisible(True)
 
     def show_error(self, msg):
-        self._state.setText("解析失败")
-        self._state.setStyleSheet("background: #ef4444; color: white; border-radius: 10px; padding: 2px 8px;")
+        self._state.setText("(解析失败)")
+        self._state.setStyleSheet("color: #ef4444; font-weight: bold;")
         self._info.setText(msg)
         self._info.setVisible(True)
         self._detail.setVisible(False)

@@ -1,4 +1,6 @@
-"""登录对话框 — QR码登录 + Cookie输入。"""
+"""登录对话框 — QR码登录 + Cookie输入（全平台支持）。"""
+from io import BytesIO
+
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
@@ -6,6 +8,20 @@ from PySide6.QtWidgets import (
     QMessageBox, QPushButton, QTabWidget, QTextEdit, QVBoxLayout, QWidget,
 )
 from shared.core.cookies import CookieManager
+
+# 平台 → login 模块路径
+LOGIN_MODULES = {
+    "douyin": "platforms.douyin.login",
+    "kuaishou": "platforms.kuaishou.login",
+    "xiaohongshu": "platforms.xiaohongshu.login",
+    "bilibili": "platforms.bilibili.login",
+}
+LOGIN_MANAGERS = {
+    "douyin": "DouyinLoginManager",
+    "kuaishou": "KuaishouLoginManager",
+    "xiaohongshu": "XiaohongshuLoginManager",
+    "bilibili": "BilibiliLoginManager",
+}
 
 
 class LoginDialog(QDialog):
@@ -38,36 +54,34 @@ class LoginDialog(QDialog):
 
         tabs = QTabWidget()
 
-        # Tab 1: QR code (bilibili only)
-        if self._platform == "bilibili":
-            qr_tab = QWidget()
-            qr_layout = QVBoxLayout(qr_tab)
-            qr_layout.addWidget(QLabel("使用 bilibili App 扫描二维码登录"))
-            self._qr_label = QLabel("点击下方按钮生成二维码")
-            self._qr_label.setAlignment(Qt.AlignCenter)
-            self._qr_label.setMinimumHeight(200)
-            self._qr_label.setStyleSheet("background: white; border-radius: 8px; padding: 10px;")
-            qr_layout.addWidget(self._qr_label)
-            qr_btns = QHBoxLayout()
-            self._qr_gen_btn = QPushButton("生成二维码")
-            self._qr_gen_btn.clicked.connect(self._generate_qr)
-            qr_btns.addWidget(self._qr_gen_btn)
-            self._qr_refresh_btn = QPushButton("刷新")
-            self._qr_refresh_btn.clicked.connect(self._generate_qr)
-            self._qr_refresh_btn.setEnabled(False)
-            qr_btns.addWidget(self._qr_refresh_btn)
-            qr_layout.addLayout(qr_btns)
-            self._qr_status = QLabel("")
-            qr_layout.addWidget(self._qr_status)
-            tabs.addTab(qr_tab, "QR码登录")
+        # Tab 1: QR code (all platforms)
+        qr_tab = QWidget()
+        qr_layout = QVBoxLayout(qr_tab)
+        qr_layout.addWidget(QLabel(f"使用 {self._platform.title()} App 扫描二维码登录"))
+        self._qr_label = QLabel("点击下方按钮生成二维码")
+        self._qr_label.setAlignment(Qt.AlignCenter)
+        self._qr_label.setMinimumHeight(200)
+        self._qr_label.setStyleSheet("background: white; border-radius: 8px; padding: 10px;")
+        qr_layout.addWidget(self._qr_label)
+        qr_btns = QHBoxLayout()
+        self._qr_gen_btn = QPushButton("生成二维码")
+        self._qr_gen_btn.clicked.connect(self._generate_qr)
+        qr_btns.addWidget(self._qr_gen_btn)
+        self._qr_refresh_btn = QPushButton("刷新")
+        self._qr_refresh_btn.clicked.connect(self._generate_qr)
+        self._qr_refresh_btn.setEnabled(False)
+        qr_btns.addWidget(self._qr_refresh_btn)
+        qr_layout.addLayout(qr_btns)
+        self._qr_status = QLabel("")
+        qr_layout.addWidget(self._qr_status)
+        tabs.addTab(qr_tab, "QR码登录")
 
         # Tab 2: Cookie input (all platforms)
         cookie_tab = QWidget()
         cookie_layout = QVBoxLayout(cookie_tab)
         if hint:
             cookie_layout.addWidget(QLabel(hint))
-        cookie_layout.addWidget(QLabel("从浏览器 DevTools > Application > Cookies 复制, 或直接粘贴 SESSDATA/Cookie 字符串"))
-
+        cookie_layout.addWidget(QLabel("从浏览器 DevTools > Application > Cookies 复制, 或直接粘贴 Cookie 字符串"))
 
         self._cookie_input = QTextEdit()
         self._cookie_input.setPlaceholderText("粘贴 Cookie 字符串...")
@@ -85,10 +99,18 @@ class LoginDialog(QDialog):
 
         layout.addWidget(tabs)
 
+    def _get_manager(self):
+        mod_path = LOGIN_MODULES.get(self._platform)
+        mgr_name = LOGIN_MANAGERS.get(self._platform)
+        if not mod_path or not mgr_name:
+            raise RuntimeError(f"{self._platform} 不支持QR登录")
+        import importlib
+        mod = importlib.import_module(mod_path)
+        return getattr(mod, mgr_name)()
+
     def _generate_qr(self):
         try:
-            from platforms.bilibili.login import BilibiliLoginManager
-            mgr = BilibiliLoginManager()
+            mgr = self._get_manager()
             url, key, img = mgr.generate_qr()
             mgr.close()
             self._qr_key = key
@@ -97,7 +119,7 @@ class LoginDialog(QDialog):
             pixmap = QPixmap()
             pixmap.loadFromData(buf.getvalue())
             self._qr_label.setPixmap(pixmap.scaled(200, 200, Qt.KeepAspectRatio))
-            self._qr_status.setText("请用 bilibili App 扫描二维码")
+            self._qr_status.setText(f"请用 {self._platform.title()} App 扫描二维码")
             self._qr_status.setStyleSheet("color: #22d3ee;")
             self._qr_gen_btn.setEnabled(False)
             self._qr_refresh_btn.setEnabled(True)
@@ -111,27 +133,26 @@ class LoginDialog(QDialog):
             self._poll_timer.stop()
             return
         try:
-            from platforms.bilibili.login import BilibiliLoginManager
-            mgr = BilibiliLoginManager()
+            mgr = self._get_manager()
             result = mgr.check_qr_status(self._qr_key)
             mgr.close()
-            status = result.get("status", -1)
-            if status == 0:
+            status_code = result.get("code", -1)
+            if status_code == 0:  # 登录成功
                 self._poll_timer.stop()
                 cookies = result.get("cookies", {})
-                sd = cookies.get("SESSDATA", "")
-                if sd:
-                    self._cm.set(self._platform, sd)
-                    self._status.setText(f"当前状态: 已设置 ({len(sd)}字符)")
+                cookie_str = "; ".join(f"{k}={v}" for k, v in cookies.items()) if cookies else ""
+                if cookie_str:
+                    self._cm.set(self._platform, cookie_str)
+                    self._status.setText(f"当前状态: 已设置 ({len(cookie_str)}字符)")
                     self._status.setStyleSheet("color: #22c55e; font-weight: bold;")
                     self._qr_status.setText("登录成功!")
                     self._qr_status.setStyleSheet("color: #22c55e; font-weight: bold;")
                 else:
-                    self._qr_status.setText("登录成功但未获取到 SESSDATA")
-            elif status == 86090:
+                    self._qr_status.setText("登录成功但未获取到Cookie")
+            elif status_code == 86090:  # 等待确认
                 self._qr_status.setText("已扫码,等待确认...")
                 self._qr_status.setStyleSheet("color: #facc15;")
-            elif status == 86038:
+            elif status_code == 86038:  # 过期
                 self._poll_timer.stop()
                 self._qr_status.setText("二维码已过期,请刷新")
                 self._qr_status.setStyleSheet("color: #ef4444;")
