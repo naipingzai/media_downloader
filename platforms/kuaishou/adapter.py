@@ -58,4 +58,28 @@ class KuaishouAdapter(PlatformAdapter):
         return [url] if url else []
 
     async def get_account_works(self, user_id: str, pages: int = 0) -> list[dict]: return []
+
+    async def fetch_user_videos(self, user_id: str, max_count: int = 30) -> list[dict]:
+        """获取用户视频列表。"""
+        from curl_cffi.requests import AsyncSession
+        h = PARAMS_HEADERS.copy()
+        h["Cookie"] = self.cookie
+        h["Referer"] = "https://www.kuaishou.com"
+        videos = []
+        async with AsyncSession(impersonate=IMPERSONATE) as c:
+            pcursor = ""
+            while len(videos) < max_count:
+                payload = {"principalId": user_id, "pcursor": pcursor}
+                r = await c.post(self.API_USER, headers=h, data=dumps(payload), timeout=10, proxy=self.proxy)
+                if r.status_code != 200:
+                    break
+                data = r.json().get("data", {}).get("list") or []
+                if not data:
+                    break
+                videos.extend(data)
+                pcursor = r.json().get("data", {}).get("pcursor", "")
+                if not pcursor or pcursor == "no_more":
+                    break
+        return videos[:max_count]
+
     async def close(self): pass

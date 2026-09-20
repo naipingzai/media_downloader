@@ -66,4 +66,41 @@ class KuaishouOps(PlatformOps):
             await adapter.close()
 
     async def _do_account(self, url, cookie, save_dir) -> FeatureResult:
-        return FeatureResult(False, "快手批量下载账号作品功能待实现")
+        adapter = await self._get_adapter(cookie)
+        storage = ConfigManager.get_storage_ops("kuaishou")
+        try:
+            user_id = url.strip().rstrip("/").split("/")[-1]
+            if not user_id:
+                return FeatureResult(False, "无法提取用户ID")
+            log = [f"用户: {user_id}"]
+            videos = await adapter.fetch_user_videos(user_id)
+            if not videos:
+                return FeatureResult(False, "获取用户作品失败或为空", log=log)
+            log.append(f"共 {len(videos)} 个视频")
+            from shared.flow.download import FileDownloader
+            from shared.core.session import create_async_client
+            files = []
+            for i, v in enumerate(videos, 1):
+                title = v.get("caption", "")[:40] or v.get("title", "")[:40] or "unknown"
+                photo_id = v.get("photoId", "") or v.get("id", "")
+                log.append(f"[{i}/{len(videos)}] {title}")
+                video_url = v.get("mainMvUrl", "") or v.get("url", "")
+                if not video_url:
+                    log.append("  无下载地址"); continue
+                work = {"platform": "kuaishou", "work_id": photo_id, "title": title,
+                        "author_name": user_id}
+                target = storage.resolve(work)
+                dlc = create_async_client()
+                try:
+                    dl = FileDownloader(client=dlc, save_dir=target.parent)
+                    result = await dl.download_file(video_url, target.name)
+                finally:
+                    await dlc.close()
+                if result:
+                    log.append(f"  ✓ {result}")
+                    files.append(str(result))
+                else:
+                    log.append("  ✗ 下载失败")
+            return FeatureResult(True, f"用户 {user_id} 共下载 {len(files)} 个视频", log=log, files=files)
+        finally:
+            await adapter.close()

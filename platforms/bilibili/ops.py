@@ -1,4 +1,4 @@
-"""Bilibili platform ops。"""
+"""Bilibili platform ops — 完整实现。"""
 from pathlib import Path
 from shared.core.ops import PlatformOps, FeatureMeta, FeatureResult
 from shared.core.config import ConfigManager
@@ -30,6 +30,7 @@ class BilibiliOps(PlatformOps):
         storage = ConfigManager.get_storage_ops("bilibili")
         try:
             from shared.flow.link import LinkExtractor
+            from shared.flow.download import FileDownloader
             from shared.core.session import create_async_client
             client = create_async_client()
             try:
@@ -38,49 +39,244 @@ class BilibiliOps(PlatformOps):
                 await client.close()
             if not links:
                 return FeatureResult(False, "未提取到有效链接")
-            log = []
+            log, files = [], []
             for i, link in enumerate(links, 1):
                 log.append(f"[{i}/{len(links)}] {link.url[:60]}")
                 raw = await adapter.request_detail(link)
-                if raw:
-                    work = adapter.parse_detail(raw)
-                    if work:
-                        log.append(f"  {work['author_name']}: {work['title'][:40]}")
-                        log.append(f"  播放: {work.get('view_count', 0)}  点赞: {work.get('digg_count', 0)}")
-            return FeatureResult(True, f"解析 {len(links)} 个视频", log=log)
+                if not raw:
+                    log.append("  获取详情失败"); continue
+                work = adapter.parse_detail(raw)
+                if not work:
+                    log.append("  解析失败"); continue
+                log.append(f"  {work['author_name']}: {work['title'][:40]}")
+                urls = adapter.get_download_urls(work)
+                if not urls:
+                    # 尝试通过 playurl 获取
+                    bvid = work.get('work_id', '')
+                    urls = await adapter.fetch_playurl(bvid)
+                if not urls:
+                    log.append("  无下载地址"); continue
+                target = storage.resolve(work)
+                dlc = create_async_client()
+                try:
+                    dl = FileDownloader(client=dlc, save_dir=target.parent)
+                    for j, file_url in enumerate(urls):
+                        ext = "mp4"
+                        fname = f"{target.stem}.{ext}" if len(urls) == 1 else f"{target.stem}_{j+1}.{ext}"
+                        result = await dl.download_file(file_url, fname)
+                        if result:
+                            log.append(f"  ✓ {result}")
+                            files.append(str(result))
+                        else:
+                            log.append(f"  ✗ 下载失败")
+                finally:
+                    await dlc.close()
+            return FeatureResult(True, f"处理 {len(links)} 个视频", log=log, files=files)
         finally:
             await adapter.close()
 
     async def _do_account(self, url, cookie, save_dir) -> FeatureResult:
         adapter = await self._get_adapter(cookie)
+        storage = ConfigManager.get_storage_ops("bilibili")
         try:
-            from re import compile
-            m = compile(r"bilibili\.com/space/([0-9]+)").search(url)
-            if not m:
-                return FeatureResult(False, "无法从链接提取用户ID")
-            mid = m.group(1)
-            self._log = []
-            self._log.append(f"用户 MID: {mid}")
-            return FeatureResult(True, f"用户 MID: {mid}", log=self._log)
+            mid = self._extract_mid(url)
+            if not mid:
+                return FeatureResult(False, "无法从链接提取用户ID，需要 bilibili.com/space/MID 格式")
+            log = [f"用户 MID: {mid}"]
+            videos = await adapter.fetch_user_videos(mid)
+            if not videos:
+                return FeatureResult(False, "获取用户作品失败或作品为空", log=log)
+            log.append(f"共 {len(videos)} 个视频")
+            from shared.flow.download import FileDownloader
+            from shared.core.session import create_async_client
+            files = []
+            for i, v in enumerate(videos, 1):
+                bvid = v.get("bvid", "")
+                title = v.get("title", "unknown")[:40]
+                log.append(f"[{i}/{len(videos)}] {title}")
+                urls = await adapter.fetch_playurl(bvid)
+                if not urls:
+                    log.append("  无下载地址"); continue
+                work = {"platform": "bilibili", "work_id": bvid, "title": title,
+                        "author_name": v.get("owner", {}).get("name", "")}
+                target = storage.resolve(work)
+                dlc = create_async_client()
+                try:
+                    dl = FileDownloader(client=dlc, save_dir=target.parent)
+                    result = await dl.download_file(urls[0], target.name)
+                finally:
+                    await dlc.close()
+                if result:
+                    log.append(f"  ✓ {result}")
+                    files.append(str(result))
+                else:
+                    log.append("  ✗ 下载失败")
+            return FeatureResult(True, f"用户 {mid} 共下载 {len(files)} 个视频", log=log, files=files)
         finally:
             await adapter.close()
 
     async def _do_series(self, url, cookie, save_dir) -> FeatureResult:
-        return FeatureResult(True, "合集功能已注册，下载逻辑待完善", log=["合集功能需要额外 API 调用"])
+        adapter = await self._get_adapter(cookie)
+        storage = ConfigManager.get_storage_ops("bilibili")
+        try:
+            mid = self._extract_mid(url)
+            sid = self._extract_id(url, "sid") or self._extract_id(url, "series_id")
+            if not mid:
+                return FeatureResult(False, "无法提取用户ID")
+            if not sid:
+                # 列出所有合集
+                series_list = await adapter.fetch_series_list(mid)
+                if not series_list:
+                    return FeatureResult(False, "未找到合集/系列", log=[f"MID: {mid}"])
+                log = [f"用户 {mid} 的合集/系列:"]
+                for s in series_list:
+                    log.append(f"  [{s.get('meta', {}).get('series_id', '')}] {s.get('meta', {}).get('name', '')} ({s.get('meta', {}).get('total', 0)}个)")
+                return FeatureResult(True, f"共 {len(series_list)} 个合集", log=log)
+            # 下载指定合集
+            videos = await adapter.fetch_series_archives(mid, int(sid))
+            if not videos:
+                return FeatureResult(False, "合集为空或获取失败", log=[f"MID: {mid}, SID: {sid}"])
+            log = [f"合集 {sid}: {len(videos)} 个视频"]
+            files = await self._batch_download(adapter, videos, storage, log)
+            return FeatureResult(True, f"合集下载 {len(files)}/{len(videos)}", log=log, files=files)
+        finally:
+            await adapter.close()
 
     async def _do_collection(self, url, cookie, save_dir) -> FeatureResult:
-        return FeatureResult(True, "收藏夹功能已注册，下载逻辑待完善", log=["收藏夹功能需要额外 API 调用"])
+        adapter = await self._get_adapter(cookie)
+        storage = ConfigManager.get_storage_ops("bilibili")
+        try:
+            # 从URL提取收藏夹ID (fid)
+            fid = self._extract_id(url, "fid") or "0"  # 0=默认收藏夹
+            media_list = await adapter.fetch_favorite_list(fid)
+            if not media_list:
+                return FeatureResult(False, "收藏夹为空或获取失败", log=[f"收藏夹ID: {fid}"])
+            log = [f"收藏夹 {fid}: {len(media_list)} 个作品"]
+            from shared.flow.download import FileDownloader
+            from shared.core.session import create_async_client
+            files = []
+            for i, item in enumerate(media_list, 1):
+                upper = item.get("upper", {})
+                title = item.get("title", "unknown")[:40]
+                bvid = item.get("bv_id", "")
+                log.append(f"[{i}/{len(media_list)}] {upper.get('name', '?')}: {title}")
+                if not bvid:
+                    log.append("  无BV号，跳过"); continue
+                urls = await adapter.fetch_playurl(bvid)
+                if not urls:
+                    log.append("  无下载地址"); continue
+                work = {"platform": "bilibili", "work_id": bvid, "title": title,
+                        "author_name": upper.get("name", "")}
+                target = storage.resolve(work)
+                dlc = create_async_client()
+                try:
+                    dl = FileDownloader(client=dlc, save_dir=target.parent)
+                    result = await dl.download_file(urls[0], target.name)
+                finally:
+                    await dlc.close()
+                if result:
+                    log.append(f"  ✓ {result}")
+                    files.append(str(result))
+                else:
+                    log.append("  ✗ 下载失败")
+            return FeatureResult(True, f"收藏夹下载 {len(files)}/{len(media_list)}", log=log, files=files)
+        finally:
+            await adapter.close()
 
     async def _do_comment(self, url, cookie, save_dir) -> FeatureResult:
-        return FeatureResult(True, "评论采集已注册，逻辑待完善", log=["评论采集需要额外 API 调用"])
+        adapter = await self._get_adapter(cookie)
+        try:
+            raw = await adapter.request_detail(url)
+            if not raw:
+                return FeatureResult(False, "获取视频信息失败")
+            work = adapter.parse_detail(raw)
+            if not work:
+                return FeatureResult(False, "解析视频信息失败")
+            bvid = work.get("work_id", "")
+            cid = raw.get("view", {}).get("cid", 0)
+            log = [f"视频: {work['title'][:40]}"]
+            comments = await adapter.fetch_comments(bvid, cid)
+            if not comments:
+                return FeatureResult(True, "无评论或获取失败", log=log)
+            log.append(f"共 {len(comments)} 条评论")
+            data = []
+            for c in comments:
+                member = c.get("member", {}) if isinstance(c, dict) else {}
+                content = c.get("content", {}) if isinstance(c, dict) else {}
+                data.append({
+                    "user": member.get("uname", ""),
+                    "text": content.get("message", ""),
+                    "digg_count": c.get("like", 0),
+                })
+            return FeatureResult(True, f"采集 {len(comments)} 条评论", log=log, data=data)
+        finally:
+            await adapter.close()
 
     async def _do_user(self, url, cookie, save_dir) -> FeatureResult:
         adapter = await self._get_adapter(cookie)
         try:
-            from re import compile
-            m = compile(r"bilibili\.com/space/([0-9]+)").search(url)
-            mid = m.group(1) if m else url.strip()
-            log = [f"用户 MID: {mid}", "用户资料采集需要额外 API 调用"]
-            return FeatureResult(True, f"用户 MID: {mid}", log=log)
+            mid = self._extract_mid(url)
+            if not mid:
+                return FeatureResult(False, "无法从链接提取用户ID")
+            user_data = await adapter.fetch_user_info(mid)
+            if not user_data:
+                return FeatureResult(False, "获取用户资料失败")
+            log = [f"用户 MID: {mid}"]
+            name = user_data.get("name", "")
+            log.append(f"昵称: {name}")
+            data = [{"field": "昵称", "value": name},
+                    {"field": "MID", "value": str(mid)},
+                    {"field": "粉丝", "value": user_data.get("fans", 0)},
+                    {"field": "关注", "value": user_data.get("following", 0)},
+                    {"field": "签名", "value": user_data.get("sign", "")},
+                    {"field": "等级", "value": user_data.get("level", 0)}]
+            return FeatureResult(True, f"用户: {name}", log=log, data=data)
         finally:
             await adapter.close()
+
+    # ── 工具方法 ──
+
+    def _extract_mid(self, url: str) -> str:
+        from re import compile
+        m = compile(r"bilibili\.com/space/(\d+)").search(url)
+        if m: return m.group(1)
+        m = compile(r"uid=(\d+)").search(url)
+        if m: return m.group(1)
+        # 纯数字
+        s = url.strip()
+        if s.isdigit(): return s
+        return ""
+
+    def _extract_id(self, url: str, param: str) -> str:
+        from re import compile
+        m = compile(rf"{param}=(\d+)").search(url)
+        return m.group(1) if m else ""
+
+    async def _batch_download(self, adapter, videos: list, storage, log: list) -> list:
+        from shared.flow.download import FileDownloader
+        from shared.core.session import create_async_client
+        files = []
+        for i, v in enumerate(videos, 1):
+            bvid = v.get("bvid", "") or v.get("work_id", "")
+            title = v.get("title", "unknown")[:40]
+            log.append(f"[{i}/{len(videos)}] {title}")
+            if not bvid:
+                log.append("  无BV号，跳过"); continue
+            urls = await adapter.fetch_playurl(bvid)
+            if not urls:
+                log.append("  无下载地址"); continue
+            work = {"platform": "bilibili", "work_id": bvid, "title": title,
+                    "author_name": v.get("owner", {}).get("name", "") or v.get("author", {}).get("name", "")}
+            target = storage.resolve(work)
+            dlc = create_async_client()
+            try:
+                dl = FileDownloader(client=dlc, save_dir=target.parent)
+                result = await dl.download_file(urls[0], target.name)
+            finally:
+                await dlc.close()
+            if result:
+                log.append(f"  ✓ {result}")
+                files.append(str(result))
+            else:
+                log.append("  ✗ 下载失败")
+        return files
