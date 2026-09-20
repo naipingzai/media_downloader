@@ -66,7 +66,12 @@ class MainWindow(QMainWindow):
             btn.clicked.connect(lambda checked, p=pid: self._select_platform(p))
             sb.addWidget(btn)
             self._platform_btns.append(btn)
-        sb.addSpacing(16)
+        sb.addSpacing(8)
+        settings_btn = QPushButton("  设置")
+        settings_btn.setObjectName("NavButton")
+        settings_btn.clicked.connect(self._open_settings)
+        sb.addWidget(settings_btn)
+        sb.addSpacing(8)
         info_card = QFrame()
         info_card.setObjectName("InfoCard")
         ic = QVBoxLayout(info_card)
@@ -103,10 +108,7 @@ class MainWindow(QMainWindow):
         ht.addWidget(page_sub)
         header.addLayout(ht)
         header.addStretch()
-        self._header_login = QPushButton("未登录")
-        self._header_login.setObjectName("GhostButton")
-        self._header_login.clicked.connect(self._open_login)
-        header.addWidget(self._header_login)
+
         wl.addLayout(header)
 
         hero = HeroPanel(workspace)
@@ -163,8 +165,6 @@ class MainWindow(QMainWindow):
     def _setup_menu(self):
         mb = self.menuBar()
         file_menu = mb.addMenu("文件")
-        file_menu.addAction("登录/Cookie", self._open_login)
-        file_menu.addAction("设置", self._open_settings)
         file_menu.addSeparator()
         file_menu.addAction("退出", self.close)
         view_menu = mb.addMenu("视图")
@@ -193,7 +193,6 @@ class MainWindow(QMainWindow):
         cookie_text = f"Cookie: {'已设置 ' + str(len(cookie)) + '字符' if cookie else '未设置'}" if hint else "Cookie: 不需要"
         self._status_platform.setText(f"平台: {platform}")
         self._status_cookie.setText(cookie_text)
-        self._header_login.setText(f"{platform.title()} {'已登录' if cookie else '未登录'}")
         self._video_info.show_empty()
         self._result_view.clear()
         self._collect_result.show_empty()
@@ -210,7 +209,6 @@ class MainWindow(QMainWindow):
         cookie = self._cm.get(self._current_platform)
         cookie_text = f"Cookie: {'已设置 ' + str(len(cookie)) + '字符' if cookie else '未设置'}"
         self._status_cookie.setText(cookie_text)
-        self._header_login.setText(f"{self._current_platform.title()} {'已登录' if cookie else '未登录'}")
 
     def _open_settings(self):
         SettingsDialog(self).exec()
@@ -265,7 +263,7 @@ class MainWindow(QMainWindow):
         loop.run_until_complete(_do())
         loop.close()
 
-    def _on_execute(self, feature_id, url, profile_key, storage_mode):
+    def _on_execute(self, feature_id, url, profile_key, storage_mode, opts=None):
         if not self._current_platform:
             self.statusBar().showMessage("请先选择平台")
             return

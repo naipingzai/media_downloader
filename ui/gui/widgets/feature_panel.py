@@ -1,8 +1,8 @@
-"""功能选择 + URL + 输出格式 + 编码 + 存储模式 + 执行。"""
+"""功能选择 + URL + 输出格式 + 编码 + 下载选项 + 存储模式 + 执行。"""
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
-    QComboBox, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QVBoxLayout, QWidget,
+    QCheckBox, QComboBox, QHBoxLayout, QLabel, QLineEdit,
+    QPushButton, QVBoxLayout, QWidget,
 )
 from shared.core.ops import PlatformBus
 from shared.core.formats import (
@@ -13,10 +13,11 @@ VIDEO_FEATURES = {"download", "account", "mix", "collection", "col_music", "coll
                   "tk_download", "tk_account", "tk_mix", "ks_download", "ks_account", "xhs_download"}
 AUDIO_FEATURES = {"live", "tk_live"}
 COLLECT_FEATURES = {"hot", "search", "comment", "user"}
+LIVE_FEATURES = {"live", "tk_live"}
 
 
 class FeaturePanel(QWidget):
-    execute_clicked = Signal(str, str, str, str)
+    execute_clicked = Signal(str, str, str, str, dict)
     preview_clicked = Signal(str)
 
     def __init__(self, parent=None):
@@ -72,6 +73,24 @@ class FeaturePanel(QWidget):
         r4.addWidget(self.audio_codec, 1)
         layout.addLayout(r4)
 
+        # 下载选项 (弹幕/字幕/封面/元数据)
+        r_opts = QHBoxLayout()
+        r_opts.addWidget(QLabel("选项:"))
+        self.danmaku_cb = QCheckBox("弹幕")
+        self.subtitle_cb = QCheckBox("字幕")
+        self.cover_cb = QCheckBox("封面")
+        self.metadata_cb = QCheckBox("元数据")
+        self.danmaku_cb.setChecked(True)
+        self.subtitle_cb.setChecked(True)
+        self.cover_cb.setChecked(True)
+        self.metadata_cb.setChecked(True)
+        r_opts.addWidget(self.danmaku_cb)
+        r_opts.addWidget(self.subtitle_cb)
+        r_opts.addWidget(self.cover_cb)
+        r_opts.addWidget(self.metadata_cb)
+        r_opts.addStretch()
+        layout.addLayout(r_opts)
+
         # 存储模式
         r5 = QHBoxLayout()
         r5.addWidget(QLabel("存储:"))
@@ -111,26 +130,28 @@ class FeaturePanel(QWidget):
         if meta:
             self.url_input.setVisible(meta.need_url)
             self.preview_btn.setVisible(meta.need_url)
-        if fid in COLLECT_FEATURES:
-            self.profile_combo.setVisible(False)
-            self.video_codec.setVisible(False)
-            self.audio_codec.setVisible(False)
-        elif fid in AUDIO_FEATURES:
-            self.profile_combo.setVisible(True)
-            self.video_codec.setVisible(False)
-            self.audio_codec.setVisible(True)
-        else:
-            self.profile_combo.setVisible(True)
-            self.video_codec.setVisible(True)
-            self.audio_codec.setVisible(True)
+        is_collect = fid in COLLECT_FEATURES
+        is_live = fid in LIVE_FEATURES
+        self.profile_combo.setVisible(not is_collect)
+        self.video_codec.setVisible(not is_collect and not is_live)
+        self.audio_codec.setVisible(not is_collect)
+        for w in (self.danmaku_cb, self.subtitle_cb, self.cover_cb, self.metadata_cb):
+            w.setVisible(not is_collect and not is_live)
 
     def _on_execute(self):
         fid = self.fn_combo.currentData()
         if fid:
+            opts = {
+                "danmaku": self.danmaku_cb.isChecked(),
+                "subtitle": self.subtitle_cb.isChecked(),
+                "cover": self.cover_cb.isChecked(),
+                "metadata": self.metadata_cb.isChecked(),
+            }
             self.execute_clicked.emit(
                 fid, self.url_input.text(),
                 self.profile_combo.currentData(),
                 self.storage_combo.currentData(),
+                opts,
             )
 
     def _current_platform(self):
