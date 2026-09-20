@@ -177,6 +177,14 @@ class MainWindow(QMainWindow):
         self.statusBar().addPermanentWidget(self._status_cookie)
         self.statusBar().showMessage(f"{PROJECT_NAME} v{__VERSION__}")
     def _select_platform(self, platform):
+        import sys
+        print(f"[DEBUG] === _select_platform({platform}) START ===", file=sys.stderr)
+        app = self.window().app() if self.window() else None
+        if app:
+            visible = [w for w in app.topLevelWidgets() if w.isVisible()]
+            print(f"[DEBUG] Visible windows BEFORE: {len(visible)}", file=sys.stderr)
+            for w in visible:
+                print(f"  {w.__class__.__name__} id={id(w)}", file=sys.stderr)
         self._current_platform = platform
         features = PlatformBus.get_features(platform)
         self._feature_panel.set_features(features)
@@ -192,6 +200,12 @@ class MainWindow(QMainWindow):
         self._video_info.show_empty()
         self._result_view.clear()
         self._collect_result.show_empty()
+        if app:
+            visible = [w for w in app.topLevelWidgets() if w.isVisible()]
+            print(f"[DEBUG] Visible windows AFTER: {len(visible)}", file=sys.stderr)
+            for w in visible:
+                print(f"  {w.__class__.__name__} id={id(w)}", file=sys.stderr)
+        print(f"[DEBUG] === _select_platform({platform}) END ===", file=sys.stderr)
     def _open_login(self):
         if not self._current_platform:
             self.statusBar().showMessage("请先选择平台")
