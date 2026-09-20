@@ -42,7 +42,12 @@ class DouyinAdapter(PlatformAdapter):
         h["uifid"] = self.uifid
         async with AsyncSession(impersonate=IMPERSONATE) as c:
             r = await c.get(f"{api_url}?{signed}", headers=h, proxy=self.proxy)
-            return r.json() if r.status_code == 200 else None
+            if r.status_code != 200:
+                return None
+            try:
+                return r.json()
+            except Exception:
+                return None
 
     # ---- detail ----
     async def request_detail(self, link) -> dict | None:

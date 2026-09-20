@@ -116,7 +116,14 @@ class DouyinOps(PlatformOps):
         adapter = await self._get_adapter(cookie)
         storage = ConfigManager.get_storage_ops("douyin")
         try:
-            room_id = url.strip().rstrip("/").split("/")[-1]
+            from urllib.parse import urlparse, parse_qs
+            parsed = urlparse(url.strip())
+            room_id = parsed.path.rstrip("/").split("/")[-1]
+            if not room_id.isdigit():
+                # fallback: 取所有数字
+                from re import findall
+                nums = findall(r"\d{10,}", url)
+                room_id = nums[0] if nums else room_id
             log = [f"正在获取直播间信息 (room_id={room_id})..."]
             data = await adapter.fetch_live(room_id)
             if not data:
