@@ -34,6 +34,7 @@ class MainWindow(QMainWindow):
         self._setup_ui()
         self._setup_menu()
         self._setup_status_bar()
+        print("[MW] MainWindow ready", flush=True)
 
     def _setup_ui(self):
         central = QWidget()
@@ -182,6 +183,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"{PROJECT_NAME} v{__VERSION__}")
 
     def _select_platform(self, platform):
+        print(f"[MW] clicked: {platform}", flush=True)
         self._current_platform = platform
         features = PlatformBus.get_features(platform)
         self._feature_panel.set_features(features)
