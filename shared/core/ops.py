@@ -31,13 +31,21 @@ class PlatformOps(ABC):
     display_name: str = ""
     cookie_hint: str = ""
     features: list[FeatureMeta] = []
+    _on_log = None
 
     async def execute(self, feature_id: str, url: str,
-                      cookie: str, save_dir: Path) -> FeatureResult:
+                      cookie: str, save_dir: Path,
+                      on_log=None) -> FeatureResult:
+        self._on_log = on_log
         method = getattr(self, f"_do_{feature_id}", None)
         if method is None:
             return FeatureResult(False, f"功能 {feature_id} 未实现")
         return await method(url, cookie, save_dir)
+
+    def log(self, msg: str):
+        """实时推送日志行。"""
+        if self._on_log:
+            self._on_log(msg)
 
 
 class PlatformBus:
@@ -71,8 +79,9 @@ class PlatformBus:
 
     @classmethod
     async def run(cls, platform: str, feature_id: str,
-                  url: str, cookie: str, save_dir: Path) -> FeatureResult:
+                  url: str, cookie: str, save_dir: Path,
+                  on_log=None) -> FeatureResult:
         ops = cls._registry.get(platform)
         if ops is None:
             return FeatureResult(False, f"平台 {platform} 未注册")
-        return await ops.execute(feature_id, url, cookie, save_dir)
+        return await ops.execute(feature_id, url, cookie, save_dir, on_log=on_log)

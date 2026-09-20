@@ -27,11 +27,20 @@ class FeatureWorker(QRunnable):
         from shared.core.ops import PlatformBus
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
+
+        def _emit_log(msg):
+            try:
+                self.signals.log_line.emit(str(msg))
+            except Exception:
+                pass
+
         try:
             result = loop.run_until_complete(
                 PlatformBus.run(self.platform, self.feature_id,
-                              self.url, self.cookie, self.save_dir)
+                              self.url, self.cookie, self.save_dir,
+                              on_log=_emit_log)
             )
+            # emit remaining log lines that weren't streamed
             for line in result.log:
                 self.signals.log_line.emit(line)
             if result.data and len(result.data) > 0:

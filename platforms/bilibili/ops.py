@@ -40,27 +40,29 @@ class BilibiliOps(PlatformOps):
             if not links:
                 return FeatureResult(False, "未提取到有效链接")
             log, files = [], []
+            def _log(msg):
+                log.append(msg)
+                self.log(msg)
             for i, link in enumerate(links, 1):
-                log.append(f"[{i}/{len(links)}] {link.url[:60]}")
+                _log(f"[{i}/{len(links)}] {link.url[:60]}")
                 raw = await adapter.request_detail(link)
                 if not raw:
-                    log.append("  获取详情失败"); continue
+                    _log("  获取详情失败"); continue
                 work = adapter.parse_detail(raw)
                 if not work:
-                    log.append("  解析失败"); continue
-                log.append(f"  {work['author_name']}: {work['title'][:40]}")
+                    _log("  解析失败"); continue
+                _log(f"  {work['author_name']}: {work['title'][:40]}")
                 urls = adapter.get_download_urls(work)
                 if not urls:
-                    # 尝试通过 playurl 获取
                     bvid = work.get('work_id', '')
                     urls = await adapter.fetch_playurl(bvid)
                 if not urls:
-                    log.append("  无下载地址"); continue
+                    _log("  无下载地址"); continue
                 target = storage.resolve(work)
                 dlc = create_async_client()
                 try:
                     dl = FileDownloader(client=dlc, save_dir=target.parent)
-                    result = await self._dash_download(dl, urls, target, log)
+                    result = await self._dash_download(dl, urls, target, _log)
                     if result:
                         files.append(result)
                 finally:
@@ -229,22 +231,26 @@ class BilibiliOps(PlatformOps):
             await adapter.close()
 
     # ── DASH 下载合并 ──
-    async def _dash_download(self, dl, urls: list, target, log: list) -> str | None:
-        """下载DASH流并合并。返回合并后文件路径。"""
+    async def _dash_download(self, dl, urls: list, target, log) -> str | None:
+        """下载DASH流并合并。返回合并后文件路径。log 可以是 list 或 callable。"""
         from shared.core import USERAGENT
-        # 设置 bilibili 下载头
         dl.client.headers.update({
             "User-Agent": USERAGENT,
             "Referer": "https://www.bilibili.com/",
         })
+        def _l(msg):
+            if callable(log):
+                log(msg)
+            else:
+                log.append(msg)
         if len(urls) >= 2:
-            log.append("  下载视频流...")
+            _l("  下载视频流...")
             v = await dl.download_file(urls[0], f"{target.stem}_v.mp4")
-            log.append("  下载音频流...")
+            _l("  下载音频流...")
             a = await dl.download_file(urls[1], f"{target.stem}_a.mp4")
             if not v or not a:
-                log.append("  ✗ 下载失败"); return None
-            log.append("  合并音视频...")
+                _l("  ✗ 下载失败"); return None
+            _l("  合并音视频...")
             from shared.core.ffmpeg import FFmpegManager
             exe = FFmpegManager.find_executable()
             if exe:
@@ -256,10 +262,11 @@ class BilibiliOps(PlatformOps):
                 v.unlink(missing_ok=True)
                 a.unlink(missing_ok=True)
                 if proc.returncode == 0:
+                    _l(f"  ✓ 合并完成: {target.name}")
                     return merged
-                log.append(f"  ✗ 合并失败")
+                _l("  ✗ 合并失败")
             else:
-                log.append("  ✗ FFmpeg未安装，保留分离文件")
+                _l("  ✗ FFmpeg未安装，保留分离文件")
             return None
         else:
             result = await dl.download_file(urls[0], target.name)
