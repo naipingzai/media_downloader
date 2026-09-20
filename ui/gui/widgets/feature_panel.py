@@ -1,23 +1,18 @@
-"""功能选择 + URL + 输出格式 + 编码 + 下载选项 + 存储模式 + 执行。"""
+"""功能选择 + URL + 下载选项 + 执行（格式/编码/存储全部移到设置）。"""
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QVBoxLayout, QWidget,
 )
 from shared.core.ops import PlatformBus
-from shared.core.formats import (
-    ContainerFormat, VIDEO_CODECS, AUDIO_CODECS, OUTPUT_PROFILES,
-)
 
-VIDEO_FEATURES = {"download", "account", "mix", "collection", "col_music", "collects",
-                  "tk_download", "tk_account", "tk_mix", "ks_download", "ks_account", "xhs_download"}
-AUDIO_FEATURES = {"live", "tk_live"}
 COLLECT_FEATURES = {"hot", "search", "comment", "user"}
 LIVE_FEATURES = {"live", "tk_live"}
+NO_URL_FEATURES = {"hot"}
 
 
 class FeaturePanel(QWidget):
-    execute_clicked = Signal(str, str, str, str, dict)
+    execute_clicked = Signal(str, str, dict)
     preview_clicked = Signal(str)
 
     def __init__(self, parent=None):
@@ -48,30 +43,8 @@ class FeaturePanel(QWidget):
         self.preview_btn = QPushButton("解析预览")
         self.preview_btn.clicked.connect(lambda: self.preview_clicked.emit(self.url_input.text()))
         r2.addWidget(self.preview_btn)
+        self._url_row = r2
         layout.addLayout(r2)
-
-        # 输出预设
-        r3 = QHBoxLayout()
-        r3.addWidget(QLabel("预设:"))
-        self.profile_combo = QComboBox()
-        for key, prof in OUTPUT_PROFILES.items():
-            self.profile_combo.addItem(prof.name, key)
-        r3.addWidget(self.profile_combo, 1)
-        layout.addLayout(r3)
-
-        # 编码选择
-        r4 = QHBoxLayout()
-        r4.addWidget(QLabel("视频:"))
-        self.video_codec = QComboBox()
-        for key, vc in VIDEO_CODECS.items():
-            self.video_codec.addItem(vc.name, key)
-        r4.addWidget(self.video_codec, 1)
-        r4.addWidget(QLabel("音频:"))
-        self.audio_codec = QComboBox()
-        for key, ac in AUDIO_CODECS.items():
-            self.audio_codec.addItem(ac.name, key)
-        r4.addWidget(self.audio_codec, 1)
-        layout.addLayout(r4)
 
         # 下载选项 (弹幕/字幕/封面/元数据)
         r_opts = QHBoxLayout()
@@ -89,19 +62,8 @@ class FeaturePanel(QWidget):
         r_opts.addWidget(self.cover_cb)
         r_opts.addWidget(self.metadata_cb)
         r_opts.addStretch()
+        self._opts_row = r_opts
         layout.addLayout(r_opts)
-
-        # 存储模式
-        r5 = QHBoxLayout()
-        r5.addWidget(QLabel("存储:"))
-        self.storage_combo = QComboBox()
-        self.storage_combo.addItem("直接存储", "flat")
-        self.storage_combo.addItem("按作者分目录", "by_author")
-        self.storage_combo.addItem("按日期分目录", "by_date")
-        self.storage_combo.addItem("按类型分目录", "by_type")
-        r5.addWidget(self.storage_combo)
-        r5.addStretch()
-        layout.addLayout(r5)
 
         # 执行按钮
         r6 = QHBoxLayout()
@@ -127,16 +89,14 @@ class FeaturePanel(QWidget):
             return
         features = PlatformBus.get_features(self._current_platform())
         meta = next((f for f in features if f.id == fid), None)
-        if meta:
-            self.url_input.setVisible(meta.need_url)
-            self.preview_btn.setVisible(meta.need_url)
+        need_url = meta.need_url if meta else True
+        self.url_input.setVisible(need_url)
+        self.preview_btn.setVisible(need_url)
         is_collect = fid in COLLECT_FEATURES
         is_live = fid in LIVE_FEATURES
-        self.profile_combo.setVisible(not is_collect)
-        self.video_codec.setVisible(not is_collect and not is_live)
-        self.audio_codec.setVisible(not is_collect)
+        show_opts = not is_collect and not is_live
         for w in (self.danmaku_cb, self.subtitle_cb, self.cover_cb, self.metadata_cb):
-            w.setVisible(not is_collect and not is_live)
+            w.setVisible(show_opts)
 
     def _on_execute(self):
         fid = self.fn_combo.currentData()
@@ -147,12 +107,7 @@ class FeaturePanel(QWidget):
                 "cover": self.cover_cb.isChecked(),
                 "metadata": self.metadata_cb.isChecked(),
             }
-            self.execute_clicked.emit(
-                fid, self.url_input.text(),
-                self.profile_combo.currentData(),
-                self.storage_combo.currentData(),
-                opts,
-            )
+            self.execute_clicked.emit(fid, self.url_input.text(), opts)
 
     def _current_platform(self):
         w = self.window()

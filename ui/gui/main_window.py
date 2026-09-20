@@ -263,7 +263,7 @@ class MainWindow(QMainWindow):
         loop.run_until_complete(_do())
         loop.close()
 
-    def _on_execute(self, feature_id, url, profile_key, storage_mode, opts=None):
+    def _on_execute(self, feature_id, url, opts=None):
         if not self._current_platform:
             self.statusBar().showMessage("请先选择平台")
             return
