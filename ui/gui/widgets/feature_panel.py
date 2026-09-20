@@ -33,7 +33,7 @@ class FeaturePanel(QWidget):
         r1 = QHBoxLayout()
         r1.addWidget(QLabel("功能:"))
         self.fn_combo = QComboBox()
-        self.fn_combo.currentIndexChanged.connect(self._on_feature_changed)
+
         r1.addWidget(self.fn_combo, 1)
         layout.addLayout(r1)
 
@@ -96,12 +96,13 @@ class FeaturePanel(QWidget):
         layout.addLayout(r6)
 
     def set_features(self, features):
+        self.fn_combo.blockSignals(True)
         self.fn_combo.clear()
         for f in features:
             self.fn_combo.addItem(f.name, f.id)
-        self.fn_combo.currentIndexChanged.connect(self._on_feature_changed)
+        self.fn_combo.blockSignals(False)
         if features:
-            self._on_feature_changed(0)
+            self.fn_combo.setCurrentIndex(0)
 
     def _on_feature_changed(self, index):
         fid = self.fn_combo.currentData()
