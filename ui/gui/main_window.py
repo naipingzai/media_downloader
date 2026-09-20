@@ -64,7 +64,7 @@ class MainWindow(QMainWindow):
         for pid in PlatformBus.list_platforms():
             btn = QPushButton(f"  {pid.title()}")
             btn.setObjectName("NavButton")
-            btn.clicked.connect(lambda checked, p=pid: self._select_platform(p))
+            btn.clicked.connect(lambda checked, p=pid: (print(f"[BTN] {p} clicked", flush=True), self._select_platform(p)))
             sb.addWidget(btn)
             self._platform_btns.append(btn)
         sb.addSpacing(16)
