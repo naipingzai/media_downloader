@@ -69,6 +69,7 @@ class MainWindow(QMainWindow):
             btn.setObjectName("NavButton")
             
             btn.clicked.connect(lambda checked, p=pid: self._select_platform(p))
+        print("[DEBUG] Button connected:", btn.text().strip())
             sb.addWidget(btn)
             self._platform_btns.append(btn)
         sb.addSpacing(16)
@@ -94,6 +95,7 @@ class MainWindow(QMainWindow):
         self._login_btn = QPushButton("登录 / Cookie")
         self._login_btn.setObjectName("SidebarAction")
         self._login_btn.clicked.connect(self._open_login)
+        print("[DEBUG] Button connected:", btn.text().strip())
         sb.addWidget(self._login_btn)
 
         shell.addWidget(sidebar)
@@ -205,6 +207,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"{PROJECT_NAME} v{__VERSION__}")
 
     def _select_platform(self, platform):
+        print("[DEBUG] _select_platform called with:", platform)
         self._current_platform = platform
         features = PlatformBus.get_features(platform)
         self._feature_panel.set_features(features)
@@ -222,6 +225,7 @@ class MainWindow(QMainWindow):
         self._collect_result.show_empty()
 
     def _open_login(self):
+        print("[DEBUG] _open_login called")
         if not self._current_platform:
             self.statusBar().showMessage("请先选择平台")
             return
@@ -236,6 +240,7 @@ class MainWindow(QMainWindow):
         self._header_login.setText(f"{self._current_platform.title()} {'已登录' if cookie else '未登录'}")
 
     def _open_settings(self):
+        print("[DEBUG] _open_settings called")
         SettingsDialog(self).exec()
 
     def _open_download_dir(self):
@@ -246,6 +251,7 @@ class MainWindow(QMainWindow):
         else: subprocess.Popen(["xdg-open", path])
 
     def _on_preview(self, url):
+        print("[DEBUG] _on_preview called:", url)
         if not url.strip():
             self.statusBar().showMessage("请输入链接")
             return
@@ -289,6 +295,7 @@ class MainWindow(QMainWindow):
         loop.close()
 
     def _on_execute(self, feature_id, url, output_fmt, storage_mode):
+        print("[DEBUG] _on_execute called:", feature_id)
         if not self._current_platform:
             self.statusBar().showMessage("请先选择平台")
             return
