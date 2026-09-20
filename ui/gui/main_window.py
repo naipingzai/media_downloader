@@ -144,6 +144,12 @@ class MainWindow(QMainWindow):
         self._collect_result = CollectResultView(workspace)
         self._result_view = ResultView(workspace)
 
+        # 固定最小高度，防止布局跳动
+        self._video_info.setMinimumHeight(180)
+        self._collect_result.setMinimumHeight(180)
+        self._feature_panel.setMinimumHeight(240)
+        self._result_view.setMinimumHeight(240)
+
         # 第0行: 作品资料卡 | 采集结果
         content_grid.addWidget(self._video_info, 0, 0)
         content_grid.addWidget(self._collect_result, 0, 1)
@@ -151,7 +157,6 @@ class MainWindow(QMainWindow):
         content_grid.addWidget(self._feature_panel, 1, 0)
         content_grid.addWidget(self._result_view, 1, 1)
 
-        # 两行均分剩余高度，保证同行左右对齐
         content_grid.setRowStretch(0, 1)
         content_grid.setRowStretch(1, 1)
 
