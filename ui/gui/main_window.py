@@ -21,6 +21,14 @@ from .widgets.collect_result import CollectResultView
 from .widgets.result_view import ResultView
 
 
+PLATFORM_LABELS = {
+    "douyin": "抖音",
+    "kuaishou": "快手",
+    "xiaohongshu": "小红书",
+    "bilibili": "B站",
+}
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -64,7 +72,8 @@ class MainWindow(QMainWindow):
         sb.addWidget(section)
         self._platform_btns = []
         for pid in PlatformBus.list_platforms():
-            btn = QPushButton(f"  {pid.title()}")
+            label = PLATFORM_LABELS.get(pid, pid.title())
+            btn = QPushButton(f"  {label}")
             btn.setObjectName("NavButton")
             btn.clicked.connect(lambda checked, p=pid: self._select_platform(p))
             sb.addWidget(btn)
@@ -85,15 +94,19 @@ class MainWindow(QMainWindow):
         info_card = QFrame()
         info_card.setObjectName("InfoCard")
         ic = QVBoxLayout(info_card)
-        ic.setContentsMargins(14, 14, 14, 14)
-        ic.setSpacing(4)
+        ic.setContentsMargins(14, 12, 14, 12)
+        ic.setSpacing(6)
         info_title = QLabel("功能概览")
         info_title.setObjectName("InfoTitle")
-        info_text = QLabel("支持 4 个平台 · 18 个功能\n下载 · 采集 · 批量 · 存储")
-        info_text.setObjectName("SidebarCaption")
-        info_text.setWordWrap(True)
         ic.addWidget(info_title)
-        ic.addWidget(info_text)
+        n_platforms = len(PlatformBus.list_platforms())
+        n_features = sum(len(PlatformBus.get_features(p)) for p in PlatformBus.list_platforms())
+        stats = QLabel(f"  {n_platforms} 个平台  ·  {n_features} 个功能")
+        stats.setObjectName("SidebarCaption")
+        ic.addWidget(stats)
+        cats = QLabel("  下载  ·  采集  ·  批量  ·  存储")
+        cats.setObjectName("SidebarCaption")
+        ic.addWidget(cats)
         sb.addWidget(info_card)
 
         sb.addStretch()
@@ -111,14 +124,14 @@ class MainWindow(QMainWindow):
         workspace = QWidget()
         workspace.setObjectName("Workspace")
         wl = QVBoxLayout(workspace)
-        wl.setContentsMargins(26, 22, 26, 16)
-        wl.setSpacing(12)
+        wl.setContentsMargins(26, 14, 26, 14)
+        wl.setSpacing(8)
 
         header = QHBoxLayout()
         ht = QVBoxLayout()
         ht.setSpacing(2)
         ht.addWidget(QLabel("下载控制台"))
-        page_sub = QLabel("融合多平台媒体下载")
+        page_sub = QLabel("支持抖音、快手、小红书、B站的媒体下载与采集工具")
         page_sub.setObjectName("Caption")
         ht.addWidget(page_sub)
         header.addLayout(ht)
@@ -127,7 +140,7 @@ class MainWindow(QMainWindow):
 
         hero = HeroPanel(workspace)
         hl = QVBoxLayout(hero)
-        hl.setContentsMargins(28, 24, 28, 26)
+        hl.setContentsMargins(28, 18, 28, 18)
         self._hero_title = QLabel("MediaDownloader")
         self._hero_title.setObjectName("HeroTitle")
         self._hero_sub = QLabel("选择平台开始")
@@ -189,7 +202,8 @@ class MainWindow(QMainWindow):
         self._current_platform = platform
         features = PlatformBus.get_features(platform)
         self._feature_panel.set_features(features)
-        self._hero_title.setText(platform.title())
+        label = PLATFORM_LABELS.get(platform, platform.title())
+        self._hero_title.setText(label)
         self._hero_sub.setText(f"{len(features)} 个功能可用")
         ops = PlatformBus.get_ops(platform)
         cookie = self._cm.get(platform)
