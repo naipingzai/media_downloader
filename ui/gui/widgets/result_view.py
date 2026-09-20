@@ -13,6 +13,7 @@ class ResultView(QWidget):
         layout.addWidget(title)
         self._log = QTextEdit()
         self._log.setReadOnly(True)
+        self._log.setMinimumHeight(0)
         self._log.setStyleSheet(
             "background: #0f172a; color: #e2e8f0; font-family: monospace; "
             "font-size: 12px; border: 1px solid #334155; border-radius: 4px;"

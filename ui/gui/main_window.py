@@ -136,13 +136,11 @@ class MainWindow(QMainWindow):
         content_grid.setColumnStretch(0, 1)
         content_grid.setColumnStretch(1, 1)
 
-        # 左列
         self._video_info = VideoInfoWidget(workspace)
         self._feature_panel = FeaturePanel(workspace)
         self._feature_panel.execute_clicked.connect(self._on_execute)
         self._feature_panel.preview_clicked.connect(self._on_preview)
 
-        # 右列
         self._collect_result = CollectResultView(workspace)
         self._result_view = ResultView(workspace)
 
@@ -153,7 +151,7 @@ class MainWindow(QMainWindow):
         content_grid.addWidget(self._feature_panel, 1, 0)
         content_grid.addWidget(self._result_view, 1, 1)
 
-        wl.addLayout(content_grid)
+        wl.addLayout(content_grid, 1)
 
         qh = QHBoxLayout()
         qh.addWidget(QLabel("任务队列"))
