@@ -1,4 +1,5 @@
 """抖音平台操作表 —— 完全自包含。"""
+import asyncio
 from pathlib import Path
 from shared.core.ops import PlatformOps, FeatureMeta, FeatureResult
 from shared.core.storage import StorageOps, safe_name
@@ -116,25 +117,107 @@ class DouyinOps(PlatformOps):
         storage = ConfigManager.get_storage_ops("douyin")
         try:
             room_id = url.strip().rstrip("/").split("/")[-1]
+            log = [f"正在获取直播间信息 (room_id={room_id})..."]
             data = await adapter.fetch_live(room_id)
             if not data:
-                return FeatureResult(False, "获取直播信息失败")
+                log.append("  ✗ 获取直播信息失败")
+                return FeatureResult(False, "获取直播信息失败", log=log)
             room_list = data.get("data", {}).get("data", [])
             room = room_list[0] if room_list else {}
             title = room.get("title", "")
             owner = room.get("owner", {}).get("nickname", "")
+            status = room.get("status", 0)
             stream = room.get("stream_url", {})
-            log = [f"主播: {owner}  标题: {title}"]
-            for q, u in stream.get("hls_pull_url_map", {}).items():
-                log.append(f"HLS [{q}]: {u[:120]}")
-            for q, u in list(stream.get("flv_pull_url_map", {}).items())[:3]:
-                log.append(f"FLV [{q}]: {u[:120]}")
-            if len(log) == 1:
-                return FeatureResult(False, "未获取到直播流")
+            log.append(f"  主播: {owner}")
+            log.append(f"  标题: {title}")
+            log.append(f"  状态: {'直播中' if status == 2 else '未开播'}")
+
+            # 选择最佳流地址
+            stream_url = ""
+            stream_type = ""
+            hls_map = stream.get("hls_pull_url_map", {})
+            flv_map = stream.get("flv_pull_url_map", {})
+            for q in ["origin", "uhd", "hd", "sd"]:
+                if q in hls_map:
+                    stream_url = hls_map[q]
+                    stream_type = "HLS"
+                    break
+            if not stream_url:
+                for q in ["origin", "uhd", "hd", "sd"]:
+                    if q in flv_map:
+                        stream_url = flv_map[q]
+                        stream_type = "FLV"
+                        break
+            if not stream_url and hls_map:
+                stream_url = list(hls_map.values())[0]
+                stream_type = "HLS"
+            if not stream_url and flv_map:
+                stream_url = list(flv_map.values())[0]
+                stream_type = "FLV"
+            if not stream_url:
+                log.append("  ✗ 未获取到直播流地址")
+                return FeatureResult(False, "未获取到直播流", log=log)
+
+            log.append(f"  流类型: {stream_type}")
+            log.append(f"  流地址: {stream_url[:100]}...")
+
+            # 保存流信息
             await storage.save_data([{"room_id": room_id, "owner": owner, "title": title,
-                "hls": dict(stream.get("hls_pull_url_map", {})),
-                "flv": dict(stream.get("flv_pull_url_map", {}))}], f"live_{room_id}")
-            return FeatureResult(True, f"直播流: {owner}", log=log)
+                "status": status, "stream_type": stream_type, "stream_url": stream_url,
+                "hls": dict(hls_map), "flv": dict(flv_map)}], f"live_{room_id}")
+
+            # 使用 FFmpeg 录制
+            from shared.core.ffmpeg import FFmpegManager
+            exe = FFmpegManager.find_executable()
+            if not exe:
+                log.append("  ✗ FFmpeg 未安装，仅保存流地址")
+                return FeatureResult(True, f"直播流已保存: {owner}", log=log,
+                    data=[{"room_id": room_id, "owner": owner, "title": title, "stream_url": stream_url}])
+
+            target = storage.resolve({"platform": "douyin", "work_id": room_id,
+                                       "title": f"直播_{owner}_{title}"[:60], "author_name": owner})
+            output_path = str(target.with_suffix(".ts"))
+            log.append(f"  开始录制 → {target.name}")
+            log.append(f"  FFmpeg: {exe}")
+
+            import subprocess
+            cmd = [
+                str(exe), "-y",
+                "-headers", f"User-Agent: Mozilla/5.0\\r\\nReferer: https://www.douyin.com/\\r\\n",
+                "-i", stream_url,
+                "-c", "copy",
+                "-f", "mpegts",
+                output_path,
+            ]
+            log.append(f"  录制中... (Ctrl+C 可停止)")
+
+            try:
+                process = subprocess.Popen(
+                    cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+                )
+                # 等待一段时间录制 (30秒用于测试，实际可设更长)
+                import time
+                start = time.time()
+                record_seconds = 30
+                while process.poll() is None and (time.time() - start) < record_seconds:
+                    await asyncio.sleep(1)
+
+                if process.poll() is None:
+                    process.terminate()
+                    process.wait(timeout=5)
+
+                elapsed = int(time.time() - start)
+                from pathlib import Path as P
+                fsize = P(output_path).stat().st_size if P(output_path).exists() else 0
+                fsize_mb = fsize / (1024 * 1024)
+                log.append(f"  ✓ 录制完成: {elapsed}秒, {fsize_mb:.1f}MB")
+                log.append(f"  文件: {output_path}")
+                return FeatureResult(True, f"直播录制完成: {owner} ({elapsed}秒, {fsize_mb:.1f}MB)",
+                    log=log, files=[output_path])
+            except Exception as e:
+                log.append(f"  ✗ 录制异常: {e}")
+                return FeatureResult(False, f"录制失败: {e}", log=log)
+
         finally:
             await adapter.close()
 
