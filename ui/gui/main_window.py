@@ -67,7 +67,7 @@ class MainWindow(QMainWindow):
         sb.addWidget(brand_caption)
         sb.addSpacing(16)
 
-        section = QLabel("PLATFORMS")
+        section = QLabel("平台选择")
         section.setObjectName("NavSection")
         sb.addWidget(section)
         self._platform_btns = []
