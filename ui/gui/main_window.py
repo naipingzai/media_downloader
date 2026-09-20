@@ -133,6 +133,8 @@ class MainWindow(QMainWindow):
 
         content_grid = QGridLayout()
         content_grid.setSpacing(16)
+        content_grid.setColumnStretch(0, 1)
+        content_grid.setColumnStretch(1, 1)
 
         # 左列
         self._video_info = VideoInfoWidget(workspace)
@@ -150,9 +152,6 @@ class MainWindow(QMainWindow):
         # 第1行: 功能与参数 | 执行日志
         content_grid.addWidget(self._feature_panel, 1, 0)
         content_grid.addWidget(self._result_view, 1, 1)
-
-        content_grid.setRowStretch(0, 1)
-        content_grid.setRowStretch(1, 1)
 
         wl.addLayout(content_grid)
 

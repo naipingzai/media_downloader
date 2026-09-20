@@ -1,4 +1,5 @@
 """采集结果展示。"""
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QHeaderView, QLabel, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 
 
@@ -16,6 +17,9 @@ class CollectResultView(QWidget):
         self._table.setEditTriggers(QTableWidget.NoEditTriggers)
         self._table.setSelectionBehavior(QTableWidget.SelectRows)
         self._table.verticalHeader().setVisible(False)
+        self._table.setMinimumHeight(0)
+        self._table.setMaximumHeight(16777215)
+        self._table.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         layout.addWidget(self._table)
 
     def show_data(self, title, headers, rows):
