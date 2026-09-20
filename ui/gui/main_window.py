@@ -151,6 +151,10 @@ class MainWindow(QMainWindow):
         content_grid.addWidget(self._feature_panel, 1, 0)
         content_grid.addWidget(self._result_view, 1, 1)
 
+        # 两行均分剩余高度，保证同行左右对齐
+        content_grid.setRowStretch(0, 1)
+        content_grid.setRowStretch(1, 1)
+
         wl.addLayout(content_grid, 1)
 
         qh = QHBoxLayout()
