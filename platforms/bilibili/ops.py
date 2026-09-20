@@ -231,6 +231,12 @@ class BilibiliOps(PlatformOps):
     # ── DASH 下载合并 ──
     async def _dash_download(self, dl, urls: list, target, log: list) -> str | None:
         """下载DASH流并合并。返回合并后文件路径。"""
+        from shared.core import USERAGENT
+        # 设置 bilibili 下载头
+        dl.client.headers.update({
+            "User-Agent": USERAGENT,
+            "Referer": "https://www.bilibili.com/",
+        })
         if len(urls) >= 2:
             log.append("  下载视频流...")
             v = await dl.download_file(urls[0], f"{target.stem}_v.mp4")
