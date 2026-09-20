@@ -18,8 +18,6 @@ from .widgets.feature_panel import FeaturePanel
 from .widgets.video_info import VideoInfoWidget
 from .widgets.collect_result import CollectResultView
 from .widgets.result_view import ResultView
-
-
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -34,14 +32,12 @@ class MainWindow(QMainWindow):
         self._setup_ui()
         self._setup_menu()
         self._setup_status_bar()
-
     def _setup_ui(self):
         central = QWidget()
         self.setCentralWidget(central)
         shell = QHBoxLayout(central)
         shell.setContentsMargins(0, 0, 0, 0)
         shell.setSpacing(0)
-
         # ===== SIDEBAR =====
         sidebar = QFrame()
         sidebar.setObjectName("Sidebar")
@@ -49,7 +45,6 @@ class MainWindow(QMainWindow):
         sb = QVBoxLayout(sidebar)
         sb.setContentsMargins(18, 22, 18, 18)
         sb.setSpacing(10)
-
         # Brand
         brand_title = QLabel("MediaDownloader")
         brand_title.setObjectName("BrandTitle")
@@ -58,7 +53,6 @@ class MainWindow(QMainWindow):
         sb.addWidget(brand_title)
         sb.addWidget(brand_caption)
         sb.addSpacing(16)
-
         # Platform navigation
         section = QLabel("PLATFORMS")
         section.setObjectName("NavSection")
@@ -69,11 +63,9 @@ class MainWindow(QMainWindow):
             btn.setObjectName("NavButton")
             
             btn.clicked.connect(lambda checked, p=pid: self._select_platform(p))
-        print("[DEBUG] Button connected:", btn.text().strip())
             sb.addWidget(btn)
             self._platform_btns.append(btn)
         sb.addSpacing(16)
-
         # Sidebar info card
         info_card = QFrame()
         info_card.setObjectName("InfoCard")
@@ -88,25 +80,19 @@ class MainWindow(QMainWindow):
         ic.addWidget(info_title)
         ic.addWidget(info_text)
         sb.addWidget(info_card)
-
         sb.addStretch()
-
         # Login button
         self._login_btn = QPushButton("登录 / Cookie")
         self._login_btn.setObjectName("SidebarAction")
         self._login_btn.clicked.connect(self._open_login)
-        print("[DEBUG] Button connected:", btn.text().strip())
         sb.addWidget(self._login_btn)
-
         shell.addWidget(sidebar)
-
         # ===== WORKSPACE =====
         workspace = QWidget()
         workspace.setObjectName("Workspace")
         wl = QVBoxLayout(workspace)
         wl.setContentsMargins(26, 22, 26, 16)
         wl.setSpacing(12)
-
         # Header
         header = QHBoxLayout()
         ht = QVBoxLayout()
@@ -122,7 +108,6 @@ class MainWindow(QMainWindow):
         self._header_login.clicked.connect(self._open_login)
         header.addWidget(self._header_login)
         wl.addLayout(header)
-
         # HeroPanel
         hero = HeroPanel(workspace)
         hl = QVBoxLayout(hero)
@@ -135,37 +120,28 @@ class MainWindow(QMainWindow):
         hl.addWidget(self._hero_sub)
         hl.addStretch()
         wl.addWidget(hero)
-
         # Content: horizontal layout
         content_row = QHBoxLayout()
         content_row.setSpacing(16)
-
         # Left: VideoInfo + FeaturePanel
         left_col = QVBoxLayout()
         left_col.setSpacing(12)
-
         self._video_info = VideoInfoWidget(workspace)
         left_col.addWidget(self._video_info, 2)
-
         self._feature_panel = FeaturePanel(workspace)
         self._feature_panel.execute_clicked.connect(self._on_execute)
         self._feature_panel.preview_clicked.connect(self._on_preview)
         left_col.addWidget(self._feature_panel, 1)
         content_row.addLayout(left_col, 5)
-
         # Right: Result + CollectResult
         right_col = QVBoxLayout()
         right_col.setSpacing(8)
-
         self._result_view = ResultView(workspace)
         right_col.addWidget(self._result_view, 2)
-
         self._collect_result = CollectResultView(workspace)
         right_col.addWidget(self._collect_result, 1)
         content_row.addLayout(right_col, 5)
-
         wl.addLayout(content_row, 1)
-
         # Download queue header
         qh = QHBoxLayout()
         qh.addWidget(QLabel("任务队列"))
@@ -180,9 +156,7 @@ class MainWindow(QMainWindow):
         clear_btn.setObjectName("SubtleButton")
         qh.addWidget(clear_btn)
         wl.addLayout(qh)
-
         shell.addWidget(workspace, 1)
-
     def _setup_menu(self):
         mb = self.menuBar()
         file_menu = mb.addMenu("文件")
@@ -190,13 +164,10 @@ class MainWindow(QMainWindow):
         file_menu.addAction("设置", self._open_settings)
         file_menu.addSeparator()
         file_menu.addAction("退出", self.close)
-
         view_menu = mb.addMenu("视图")
         view_menu.addAction("打开下载目录", self._open_download_dir)
-
         help_menu = mb.addMenu("帮助")
         help_menu.addAction("关于", lambda: self.statusBar().showMessage(f"{PROJECT_NAME} v{__VERSION__}"))
-
     def _setup_status_bar(self):
         self._status_platform = QLabel("")
         self._status_feature = QLabel("")
@@ -205,9 +176,7 @@ class MainWindow(QMainWindow):
         self.statusBar().addPermanentWidget(self._status_feature)
         self.statusBar().addPermanentWidget(self._status_cookie)
         self.statusBar().showMessage(f"{PROJECT_NAME} v{__VERSION__}")
-
     def _select_platform(self, platform):
-        print("[DEBUG] _select_platform called with:", platform)
         self._current_platform = platform
         features = PlatformBus.get_features(platform)
         self._feature_panel.set_features(features)
@@ -223,9 +192,7 @@ class MainWindow(QMainWindow):
         self._video_info.show_empty()
         self._result_view.clear()
         self._collect_result.show_empty()
-
     def _open_login(self):
-        print("[DEBUG] _open_login called")
         if not self._current_platform:
             self.statusBar().showMessage("请先选择平台")
             return
@@ -238,20 +205,15 @@ class MainWindow(QMainWindow):
         cookie_text = f"Cookie: {'已设置 ' + str(len(cookie)) + '字符' if cookie else '未设置'}"
         self._status_cookie.setText(cookie_text)
         self._header_login.setText(f"{self._current_platform.title()} {'已登录' if cookie else '未登录'}")
-
     def _open_settings(self):
-        print("[DEBUG] _open_settings called")
         SettingsDialog(self).exec()
-
     def _open_download_dir(self):
         import subprocess, sys
         path = str(VOLUME)
         if sys.platform == "darwin": subprocess.Popen(["open", path])
         elif sys.platform == "win32": subprocess.Popen(["explorer", path])
         else: subprocess.Popen(["xdg-open", path])
-
     def _on_preview(self, url):
-        print("[DEBUG] _on_preview called:", url)
         if not url.strip():
             self.statusBar().showMessage("请输入链接")
             return
@@ -293,9 +255,7 @@ class MainWindow(QMainWindow):
         loop = asyncio.new_event_loop()
         loop.run_until_complete(_do())
         loop.close()
-
     def _on_execute(self, feature_id, url, output_fmt, storage_mode):
-        print("[DEBUG] _on_execute called:", feature_id)
         if not self._current_platform:
             self.statusBar().showMessage("请先选择平台")
             return
@@ -311,7 +271,6 @@ class MainWindow(QMainWindow):
         worker.signals.finished.connect(self._on_result)
         worker.signals.error.connect(lambda e: self._result_view.append(f"错误: {e}", "#ef4444"))
         self._pool.start(worker)
-
     def _on_result(self, result):
         self._result_view.set_result(result)
         if result.get("success"):
