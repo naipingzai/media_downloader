@@ -1,8 +1,9 @@
 """设置对话框 — 全局默认配置。"""
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout,
     QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout,
-    QWidget, QGroupBox,
+    QWidget, QGroupBox, QFrame,
 )
 from shared.core.config import ConfigManager, AppConfig
 from shared.core.ffmpeg import FFmpegManager
@@ -20,12 +21,19 @@ IMAGE_FORMATS = [
 ]
 
 
+def _sep():
+    line = QFrame()
+    line.setFrameShape(QFrame.HLine)
+    line.setStyleSheet("color: #334155;")
+    return line
+
+
 class SettingsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("应用设置")
-        self.setMinimumWidth(600)
-        self.setMinimumHeight(560)
+        self.setMinimumWidth(620)
+        self.setMinimumHeight(580)
         self._config = ConfigManager.load()
         self._setup_ui()
 
@@ -39,11 +47,16 @@ class SettingsDialog(QDialog):
         title.setObjectName("SectionTitle")
         root.addWidget(title)
 
-        # ── 存储设置 ──
-        grp_store = QGroupBox("存储")
-        fs = QFormLayout(grp_store)
-        fs.setVerticalSpacing(10)
-        fs.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        # ── 共享表单布局 ──
+        form = QFormLayout()
+        form.setVerticalSpacing(10)
+        form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        form.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+        # ── 存储 ──
+        lbl_store = QLabel("存储")
+        lbl_store.setStyleSheet("color: #22d3ee; font-weight: bold; font-size: 13px; margin-top: 4px;")
+        form.addRow(lbl_store)
 
         self._mode = QComboBox()
         self._mode.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -52,7 +65,7 @@ class SettingsDialog(QDialog):
             self._mode.addItem(name, val)
         idx = self._mode.findData(self._config.storage_mode)
         if idx >= 0: self._mode.setCurrentIndex(idx)
-        fs.addRow("存储模式:", self._mode)
+        form.addRow("存储模式:", self._mode)
 
         self._fmt = QComboBox()
         self._fmt.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -60,18 +73,18 @@ class SettingsDialog(QDialog):
             self._fmt.addItem(name, val)
         idx = self._fmt.findData(self._config.storage_format)
         if idx >= 0: self._fmt.setCurrentIndex(idx)
-        fs.addRow("数据格式:", self._fmt)
+        form.addRow("数据格式:", self._fmt)
 
         self._dedup = QCheckBox("启用去重")
         self._dedup.setChecked(self._config.dedup)
-        fs.addRow("", self._dedup)
-        root.addWidget(grp_store)
+        form.addRow("去重:", self._dedup)
+
+        form.addRow(_sep())
 
         # ── 输出格式 ──
-        grp_fmt = QGroupBox("输出格式")
-        ff = QFormLayout(grp_fmt)
-        ff.setVerticalSpacing(10)
-        ff.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        lbl_fmt = QLabel("输出格式")
+        lbl_fmt.setStyleSheet("color: #22d3ee; font-weight: bold; font-size: 13px; margin-top: 4px;")
+        form.addRow(lbl_fmt)
 
         self._profile = QComboBox()
         self._profile.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -79,7 +92,7 @@ class SettingsDialog(QDialog):
             self._profile.addItem(prof.name, key)
         idx = self._profile.findData(self._config.default_profile)
         if idx >= 0: self._profile.setCurrentIndex(idx)
-        ff.addRow("视频预设:", self._profile)
+        form.addRow("视频预设:", self._profile)
 
         self._vcodec = QComboBox()
         self._vcodec.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -87,7 +100,7 @@ class SettingsDialog(QDialog):
             self._vcodec.addItem(vc.name, key)
         idx = self._vcodec.findData(self._config.default_video_codec)
         if idx >= 0: self._vcodec.setCurrentIndex(idx)
-        ff.addRow("视频编码:", self._vcodec)
+        form.addRow("视频编码:", self._vcodec)
 
         self._acodec = QComboBox()
         self._acodec.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -95,7 +108,7 @@ class SettingsDialog(QDialog):
             self._acodec.addItem(ac.name, key)
         idx = self._acodec.findData(self._config.default_audio_codec)
         if idx >= 0: self._acodec.setCurrentIndex(idx)
-        ff.addRow("音频编码:", self._acodec)
+        form.addRow("音频编码:", self._acodec)
 
         self._img_fmt = QComboBox()
         self._img_fmt.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -103,14 +116,14 @@ class SettingsDialog(QDialog):
             self._img_fmt.addItem(name, val)
         idx = self._img_fmt.findData(self._config.default_image_format)
         if idx >= 0: self._img_fmt.setCurrentIndex(idx)
-        ff.addRow("图片格式:", self._img_fmt)
-        root.addWidget(grp_fmt)
+        form.addRow("图片格式:", self._img_fmt)
+
+        form.addRow(_sep())
 
         # ── 下载选项 ──
-        grp_dl = QGroupBox("下载选项 (默认值)")
-        dl = QFormLayout(grp_dl)
-        dl.setVerticalSpacing(10)
-        dl.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        lbl_dl = QLabel("下载选项")
+        lbl_dl.setStyleSheet("color: #22d3ee; font-weight: bold; font-size: 13px; margin-top: 4px;")
+        form.addRow(lbl_dl)
 
         self._dl_danmaku = QCheckBox("弹幕")
         self._dl_danmaku.setChecked(self._config.download_danmaku)
@@ -126,13 +139,14 @@ class SettingsDialog(QDialog):
         r_dl.addWidget(self._dl_cover)
         r_dl.addWidget(self._dl_metadata)
         r_dl.addStretch()
-        dl.addRow("", r_dl)
-        root.addWidget(grp_dl)
+        form.addRow("默认选择:", r_dl)
+
+        form.addRow(_sep())
 
         # ── FFmpeg ──
-        grp_ff = QGroupBox("FFmpeg")
-        ff2 = QFormLayout(grp_ff)
-        ff2.setVerticalSpacing(10)
+        lbl_ff = QLabel("FFmpeg")
+        lbl_ff.setStyleSheet("color: #22d3ee; font-weight: bold; font-size: 13px; margin-top: 4px;")
+        form.addRow(lbl_ff)
 
         ff_row = QHBoxLayout()
         self._ffmpeg = QLineEdit(self._config.ffmpeg_path)
@@ -140,14 +154,14 @@ class SettingsDialog(QDialog):
         browse = QPushButton("浏览...")
         browse.clicked.connect(self._browse)
         ff_row.addWidget(browse)
-        ff2.addRow("FFmpeg 路径:", ff_row)
+        form.addRow("路径:", ff_row)
 
         ok, msg = FFmpegManager.check_available(self._config.ffmpeg_path or None)
         status = QLabel(f"{'✓ ' + msg if ok else '✗ ' + msg}")
         status.setStyleSheet(f"color: {'#22c55e' if ok else '#ef4444'}; font-size: 11px;")
-        ff2.addRow("", status)
-        root.addWidget(grp_ff)
+        form.addRow("", status)
 
+        root.addLayout(form)
         root.addStretch()
 
         btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
