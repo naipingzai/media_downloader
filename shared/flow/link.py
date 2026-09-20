@@ -98,6 +98,9 @@ class LinkExtractor:
         # 小红书
         if "xiaohongshu.com" in url or "rednote.com" in url:
             return self._classify_xiaohongshu(url)
+        # Bilibili
+        if "bilibili.com" in url or "b23.tv" in url:
+            return self._classify_bilibili(url)
         return None
 
     def _classify_douyin(self, url: str, platform: str) -> ExtractedLink | None:
@@ -151,3 +154,20 @@ class LinkExtractor:
         if m:
             return ExtractedLink(url=url, link_type=LinkType.ACCOUNT, platform="xiaohongshu", user_id=m.group(1))
         return None
+
+    def _classify_bilibili(self, url: str) -> ExtractedLink | None:
+        from re import compile
+        # 视频 BV号
+        m = compile(r"bilibili\.com/video/([A-Za-z0-9]+)").search(url)
+        if m:
+            return ExtractedLink(url=url, link_type=LinkType.DETAIL, platform="bilibili", work_id=m.group(1))
+        # b23.tv 短链 (已解析为长链)
+        m = compile(r"bilibili\.com/video/([A-Za-z0-9]+)").search(url)
+        if m:
+            return ExtractedLink(url=url, link_type=LinkType.DETAIL, platform="bilibili", work_id=m.group(1))
+        # 用户空间
+        m = compile(r"bilibili\.com/space/(\d+)").search(url)
+        if m:
+            return ExtractedLink(url=url, link_type=LinkType.ACCOUNT, platform="bilibili", user_id=m.group(1))
+        # 通用: URL中包含bilibili，整条URL作为链接传给adapter
+        return ExtractedLink(url=url, link_type=LinkType.DETAIL, platform="bilibili")
