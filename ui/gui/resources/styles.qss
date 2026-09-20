@@ -1,7 +1,7 @@
 QMainWindow { background: #0f172a; }
 #Sidebar { background: #1e293b; border-right: 1px solid #334155; }
 #BrandTitle { color: #facc15; font-size: 18px; font-weight: bold; }
-#HeroPanel { border-radius: 8px; min-height: 100px; }
+#HeroPanel { border-radius: 8px; }
 #HeroTitle { color: white; font-size: 20px; font-weight: bold; }
 Panel { background: #1e293b; border-radius: 8px; padding: 12px; }
 SectionTitle { color: #22d3ee; font-weight: bold; font-size: 14px; }

@@ -15,15 +15,12 @@ class CollectResultView(QWidget):
         self._table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self._table.setEditTriggers(QTableWidget.NoEditTriggers)
         self._table.setSelectionBehavior(QTableWidget.SelectRows)
+        self._table.verticalHeader().setVisible(False)
         layout.addWidget(self._table)
-        self._empty = QLabel("等待执行...", self)
-        self._empty.setStyleSheet("color: #64748b;")
-        self._table.setVisible(False)
 
     def show_data(self, title, headers, rows):
         self._title.setText(title)
         self._table.setVisible(True)
-        self._empty.setVisible(False)
         self._table.setColumnCount(len(headers))
         self._table.setHorizontalHeaderLabels(headers)
         self._table.setRowCount(len(rows))
@@ -31,10 +28,9 @@ class CollectResultView(QWidget):
             for j, val in enumerate(row):
                 self._table.setItem(i, j, QTableWidgetItem(str(val)))
 
-    def show_empty(self, msg="等待执行..."):
+    def show_empty(self):
         self._table.setVisible(False)
-        self._empty.setText(msg)
-        self._empty.setVisible(True)
+        self._title.setText("采集结果")
 
     def show_hot_list(self, data):
         self.show_data("抖音热榜 TOP 20", ["排名", "关键词", "热度"],

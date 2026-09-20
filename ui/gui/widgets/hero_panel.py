@@ -9,7 +9,7 @@ class HeroPanel(QWidget):
         super().__init__(parent)
         self.setObjectName("HeroPanel")
         self.setAttribute(Qt.WA_StyledBackground, True)
-        self.setMinimumHeight(140)
+        self.setFixedHeight(80)
 
     def paintEvent(self, event):
         painter = QPainter(self)
