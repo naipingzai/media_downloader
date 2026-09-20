@@ -1,4 +1,4 @@
-"""功能选择 + URL + 输出格式(按媒体类型) + 编码 + 存储模式 + 执行。"""
+"""功能选择 + URL + 输出格式 + 编码 + 存储模式 + 执行。"""
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QComboBox, QHBoxLayout, QLabel, QLineEdit, QPushButton,
@@ -9,11 +9,11 @@ from shared.core.formats import (
     ContainerFormat, VIDEO_CODECS, AUDIO_CODECS, OUTPUT_PROFILES,
 )
 
-# 功能分类
 VIDEO_FEATURES = {"download", "account", "mix", "collection", "col_music", "collects",
                   "tk_download", "tk_account", "tk_mix", "ks_download", "ks_account", "xhs_download"}
-AUDIO_FEATURES = {"live", "tk_live"}  # 直播流
+AUDIO_FEATURES = {"live", "tk_live"}
 COLLECT_FEATURES = {"hot", "search", "comment", "user"}
+
 
 class FeaturePanel(QWidget):
     execute_clicked = Signal(str, str, str, str)
@@ -30,13 +30,15 @@ class FeaturePanel(QWidget):
         title.setObjectName("SectionTitle")
         layout.addWidget(title)
 
+        # 功能选择
         r1 = QHBoxLayout()
         r1.addWidget(QLabel("功能:"))
         self.fn_combo = QComboBox()
-
+        self.fn_combo.currentIndexChanged.connect(self._on_feature_changed)
         r1.addWidget(self.fn_combo, 1)
         layout.addLayout(r1)
 
+        # URL 输入
         r2 = QHBoxLayout()
         r2.addWidget(QLabel("链接:"))
         self.url_input = QLineEdit()
@@ -47,35 +49,30 @@ class FeaturePanel(QWidget):
         r2.addWidget(self.preview_btn)
         layout.addLayout(r2)
 
-        # 输出格式区 (根据媒体类型动态显示)
-        self._format_widget = QWidget()
-        fl = QVBoxLayout(self._format_widget)
-        fl.setContentsMargins(0, 0, 0, 0)
-        fl.setSpacing(4)
-
+        # 输出预设
         r3 = QHBoxLayout()
         r3.addWidget(QLabel("预设:"))
         self.profile_combo = QComboBox()
         for key, prof in OUTPUT_PROFILES.items():
             self.profile_combo.addItem(prof.name, key)
         r3.addWidget(self.profile_combo, 1)
-        fl.addLayout(r3)
+        layout.addLayout(r3)
 
+        # 编码选择
         r4 = QHBoxLayout()
-        r4.addWidget(QLabel("视频编码:"))
+        r4.addWidget(QLabel("视频:"))
         self.video_codec = QComboBox()
         for key, vc in VIDEO_CODECS.items():
             self.video_codec.addItem(vc.name, key)
         r4.addWidget(self.video_codec, 1)
-        r4.addWidget(QLabel("音频编码:"))
+        r4.addWidget(QLabel("音频:"))
         self.audio_codec = QComboBox()
         for key, ac in AUDIO_CODECS.items():
             self.audio_codec.addItem(ac.name, key)
         r4.addWidget(self.audio_codec, 1)
-        fl.addLayout(r4)
+        layout.addLayout(r4)
 
-        layout.addWidget(self._format_widget)
-
+        # 存储模式
         r5 = QHBoxLayout()
         r5.addWidget(QLabel("存储:"))
         self.storage_combo = QComboBox()
@@ -87,6 +84,7 @@ class FeaturePanel(QWidget):
         r5.addStretch()
         layout.addLayout(r5)
 
+        # 执行按钮
         r6 = QHBoxLayout()
         self.exec_btn = QPushButton("执行")
         self.exec_btn.setObjectName("PrimaryButton")
@@ -113,7 +111,6 @@ class FeaturePanel(QWidget):
         if meta:
             self.url_input.setVisible(meta.need_url)
             self.preview_btn.setVisible(meta.need_url)
-        # 根据功能类型切换显示格式选项
         if fid in COLLECT_FEATURES:
             self.profile_combo.setVisible(False)
             self.video_codec.setVisible(False)
