@@ -21,8 +21,9 @@ class FeaturePanel(QWidget):
         from PySide6.QtCore import Qt as _Qt
         self.setAttribute(_Qt.WA_StyledBackground, True)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 14, 16, 14)
+        layout.setContentsMargins(16, 12, 16, 12)
         layout.setSpacing(8)
+        layout.setAlignment(Qt.AlignTop)
 
         title = QLabel("功能与参数")
         title.setObjectName("SectionTitle")
