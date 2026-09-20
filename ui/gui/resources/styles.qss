@@ -3,9 +3,9 @@ QMainWindow { background: #0f172a; }
 #BrandTitle { color: #facc15; font-size: 18px; font-weight: bold; }
 #HeroPanel { border-radius: 8px; }
 #HeroTitle { color: white; font-size: 20px; font-weight: bold; }
-Panel {
+#Panel {
     background: #1e293b;
-    border: 1px solid #334155;
+    border: 2px solid #64748b;
     border-radius: 8px;
     padding: 12px;
 }
