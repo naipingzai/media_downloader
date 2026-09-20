@@ -30,6 +30,7 @@ class SettingsDialog(QDialog):
         self._setup_ui()
 
     def _setup_ui(self):
+        from PySide6.QtWidgets import QSizePolicy
         root = QVBoxLayout(self)
         root.setContentsMargins(18, 16, 18, 16)
         root.setSpacing(14)
@@ -42,8 +43,10 @@ class SettingsDialog(QDialog):
         grp_store = QGroupBox("存储")
         fs = QFormLayout(grp_store)
         fs.setVerticalSpacing(10)
+        fs.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
 
         self._mode = QComboBox()
+        self._mode.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         for name, val in [("直接存储", "flat"), ("按作者分目录", "by_author"),
                          ("按日期分目录", "by_date"), ("按类型分目录", "by_type")]:
             self._mode.addItem(name, val)
@@ -52,6 +55,7 @@ class SettingsDialog(QDialog):
         fs.addRow("存储模式:", self._mode)
 
         self._fmt = QComboBox()
+        self._fmt.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         for name, val in [("JSON", "json"), ("CSV", "csv")]:
             self._fmt.addItem(name, val)
         idx = self._fmt.findData(self._config.storage_format)
@@ -67,8 +71,10 @@ class SettingsDialog(QDialog):
         grp_fmt = QGroupBox("输出格式")
         ff = QFormLayout(grp_fmt)
         ff.setVerticalSpacing(10)
+        ff.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
 
         self._profile = QComboBox()
+        self._profile.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         for key, prof in OUTPUT_PROFILES.items():
             self._profile.addItem(prof.name, key)
         idx = self._profile.findData(self._config.default_profile)
@@ -76,6 +82,7 @@ class SettingsDialog(QDialog):
         ff.addRow("视频预设:", self._profile)
 
         self._vcodec = QComboBox()
+        self._vcodec.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         for key, vc in VIDEO_CODECS.items():
             self._vcodec.addItem(vc.name, key)
         idx = self._vcodec.findData(self._config.default_video_codec)
@@ -83,6 +90,7 @@ class SettingsDialog(QDialog):
         ff.addRow("视频编码:", self._vcodec)
 
         self._acodec = QComboBox()
+        self._acodec.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         for key, ac in AUDIO_CODECS.items():
             self._acodec.addItem(ac.name, key)
         idx = self._acodec.findData(self._config.default_audio_codec)
@@ -90,6 +98,7 @@ class SettingsDialog(QDialog):
         ff.addRow("音频编码:", self._acodec)
 
         self._img_fmt = QComboBox()
+        self._img_fmt.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         for name, val in IMAGE_FORMATS:
             self._img_fmt.addItem(name, val)
         idx = self._img_fmt.findData(self._config.default_image_format)
@@ -101,6 +110,7 @@ class SettingsDialog(QDialog):
         grp_dl = QGroupBox("下载选项 (默认值)")
         dl = QFormLayout(grp_dl)
         dl.setVerticalSpacing(10)
+        dl.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
 
         self._dl_danmaku = QCheckBox("弹幕")
         self._dl_danmaku.setChecked(self._config.download_danmaku)
