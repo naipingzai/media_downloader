@@ -122,7 +122,7 @@ class MainWindow(QMainWindow):
         wl.addLayout(header)
 
         # HeroPanel
-        hero = HeroPanel()
+        hero = HeroPanel(workspace)
         hl = QVBoxLayout(hero)
         hl.setContentsMargins(28, 24, 28, 26)
         self._hero_title = QLabel("MediaDownloader")
@@ -142,10 +142,10 @@ class MainWindow(QMainWindow):
         left_col = QVBoxLayout()
         left_col.setSpacing(12)
 
-        self._video_info = VideoInfoWidget()
+        self._video_info = VideoInfoWidget(workspace)
         left_col.addWidget(self._video_info, 2)
 
-        self._feature_panel = FeaturePanel()
+        self._feature_panel = FeaturePanel(workspace)
         self._feature_panel.execute_clicked.connect(self._on_execute)
         self._feature_panel.preview_clicked.connect(self._on_preview)
         left_col.addWidget(self._feature_panel, 1)
@@ -155,10 +155,10 @@ class MainWindow(QMainWindow):
         right_col = QVBoxLayout()
         right_col.setSpacing(8)
 
-        self._result_view = ResultView()
+        self._result_view = ResultView(workspace)
         right_col.addWidget(self._result_view, 2)
 
-        self._collect_result = CollectResultView()
+        self._collect_result = CollectResultView(workspace)
         right_col.addWidget(self._collect_result, 1)
         content_row.addLayout(right_col, 5)
 
