@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
     QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
 from shared.core.ops import PlatformBus
+from shared.core.i18n import t
 
 COLLECT_FEATURES = {"hot", "search", "comment", "user"}
 LIVE_FEATURES = {"live", "tk_live"}
@@ -23,7 +24,7 @@ class FeaturePanel(QWidget):
         outer.setSpacing(0)
         hdr = QHBoxLayout()
         hdr.setContentsMargins(14, 10, 14, 4)
-        title = QLabel("功能与参数")
+        title = QLabel(t("feature_params"))
         title.setObjectName("SectionTitle")
         title.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         hdr.addWidget(title)
@@ -39,28 +40,28 @@ class FeaturePanel(QWidget):
         layout.setSpacing(8)
 
         r1 = QHBoxLayout()
-        r1.addWidget(QLabel("功能:"))
+        r1.addWidget(QLabel(t("feature") + ":"))
         self.fn_combo = QComboBox()
         self.fn_combo.currentIndexChanged.connect(self._on_feature_changed)
         r1.addWidget(self.fn_combo, 1)
         layout.addLayout(r1)
 
         r2 = QHBoxLayout()
-        r2.addWidget(QLabel("链接:"))
+        r2.addWidget(QLabel(t("link") + ":"))
         self.url_input = QLineEdit()
-        self.url_input.setPlaceholderText("粘贴链接/关键词")
+        self.url_input.setPlaceholderText(t("link_placeholder"))
         r2.addWidget(self.url_input, 1)
-        self.preview_btn = QPushButton("解析预览")
+        self.preview_btn = QPushButton(t("preview_parse"))
         self.preview_btn.clicked.connect(lambda: self.preview_clicked.emit(self.url_input.text()))
         r2.addWidget(self.preview_btn)
         layout.addLayout(r2)
 
         r_opts = QHBoxLayout()
-        r_opts.addWidget(QLabel("选项:"))
-        self.danmaku_cb = QCheckBox("弹幕")
-        self.subtitle_cb = QCheckBox("字幕")
-        self.cover_cb = QCheckBox("封面")
-        self.metadata_cb = QCheckBox("元数据")
+        r_opts.addWidget(QLabel(t("options") + ":"))
+        self.danmaku_cb = QCheckBox(t("danmaku"))
+        self.subtitle_cb = QCheckBox(t("subtitle_opt"))
+        self.cover_cb = QCheckBox(t("cover"))
+        self.metadata_cb = QCheckBox(t("metadata"))
         for cb in (self.danmaku_cb, self.subtitle_cb, self.cover_cb, self.metadata_cb):
             cb.setChecked(True)
             r_opts.addWidget(cb)
@@ -68,7 +69,7 @@ class FeaturePanel(QWidget):
         layout.addLayout(r_opts)
 
         r6 = QHBoxLayout()
-        self.exec_btn = QPushButton("执行")
+        self.exec_btn = QPushButton(t("execute"))
         self.exec_btn.setObjectName("PrimaryButton")
         self.exec_btn.clicked.connect(self._on_execute)
         r6.addWidget(self.exec_btn)

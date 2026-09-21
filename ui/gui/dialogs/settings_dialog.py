@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout,
     QWidget, QGroupBox, QFrame,
 )
+from shared.core.i18n import t, set_lang, get_lang
 from shared.core.config import ConfigManager, AppConfig
 from shared.core.ffmpeg import FFmpegManager
 from shared.core.formats import (
@@ -31,7 +32,7 @@ def _sep():
 class SettingsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("应用设置")
+        self.setWindowTitle(t("app_settings"))
         self.setMinimumWidth(620)
         self.setMinimumHeight(580)
         self._config = ConfigManager.load()
@@ -43,7 +44,7 @@ class SettingsDialog(QDialog):
         root.setContentsMargins(18, 16, 18, 16)
         root.setSpacing(14)
 
-        title = QLabel("应用设置")
+        title = QLabel(t("app_settings"))
         title.setObjectName("SectionTitle")
         root.addWidget(title)
 
@@ -60,24 +61,24 @@ class SettingsDialog(QDialog):
 
         self._mode = QComboBox()
         self._mode.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        for name, val in [("直接存储", "flat"), ("按作者分目录", "by_author"),
-                         ("按日期分目录", "by_date"), ("按类型分目录", "by_type")]:
+        for name, val in [(t("flat"), "flat"), (t("by_author"), "by_author"),
+                         (t("by_date"), "by_date"), (t("by_type"), "by_type")]:
             self._mode.addItem(name, val)
         idx = self._mode.findData(self._config.storage_mode)
         if idx >= 0: self._mode.setCurrentIndex(idx)
-        form.addRow("存储模式:", self._mode)
+        form.addRow(t("storage_mode"), self._mode)
 
         self._fmt = QComboBox()
         self._fmt.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        for name, val in [("JSON", "json"), ("CSV", "csv")]:
+        for name, val in [(t("json"), "json"), (t("csv"), "csv")]:
             self._fmt.addItem(name, val)
         idx = self._fmt.findData(self._config.storage_format)
         if idx >= 0: self._fmt.setCurrentIndex(idx)
-        form.addRow("数据格式:", self._fmt)
+        form.addRow(t("data_format"), self._fmt)
 
-        self._dedup = QCheckBox("启用去重")
+        self._dedup = QCheckBox(t("dedup_enable"))
         self._dedup.setChecked(self._config.dedup)
-        form.addRow("去重:", self._dedup)
+        form.addRow(t("dedup"), self._dedup)
 
         form.addRow(_sep())
 
@@ -92,7 +93,7 @@ class SettingsDialog(QDialog):
             self._profile.addItem(prof.name, key)
         idx = self._profile.findData(self._config.default_profile)
         if idx >= 0: self._profile.setCurrentIndex(idx)
-        form.addRow("视频预设:", self._profile)
+        form.addRow(t("video_profile"), self._profile)
 
         self._vcodec = QComboBox()
         self._vcodec.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -100,7 +101,7 @@ class SettingsDialog(QDialog):
             self._vcodec.addItem(vc.name, key)
         idx = self._vcodec.findData(self._config.default_video_codec)
         if idx >= 0: self._vcodec.setCurrentIndex(idx)
-        form.addRow("视频编码:", self._vcodec)
+        form.addRow(t("video_codec"), self._vcodec)
 
         self._acodec = QComboBox()
         self._acodec.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -108,7 +109,7 @@ class SettingsDialog(QDialog):
             self._acodec.addItem(ac.name, key)
         idx = self._acodec.findData(self._config.default_audio_codec)
         if idx >= 0: self._acodec.setCurrentIndex(idx)
-        form.addRow("音频编码:", self._acodec)
+        form.addRow(t("audio_codec"), self._acodec)
 
         self._img_fmt = QComboBox()
         self._img_fmt.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -116,7 +117,7 @@ class SettingsDialog(QDialog):
             self._img_fmt.addItem(name, val)
         idx = self._img_fmt.findData(self._config.default_image_format)
         if idx >= 0: self._img_fmt.setCurrentIndex(idx)
-        form.addRow("图片格式:", self._img_fmt)
+        form.addRow(t("image_format"), self._img_fmt)
 
         form.addRow(_sep())
 
@@ -125,13 +126,13 @@ class SettingsDialog(QDialog):
         lbl_dl.setStyleSheet("color: #22d3ee; font-weight: bold; font-size: 13px; margin-top: 4px;")
         form.addRow(lbl_dl)
 
-        self._dl_danmaku = QCheckBox("弹幕")
+        self._dl_danmaku = QCheckBox(t("danmaku"))
         self._dl_danmaku.setChecked(self._config.download_danmaku)
-        self._dl_subtitle = QCheckBox("字幕")
+        self._dl_subtitle = QCheckBox(t("subtitle_opt"))
         self._dl_subtitle.setChecked(self._config.download_subtitle)
-        self._dl_cover = QCheckBox("封面")
+        self._dl_cover = QCheckBox(t("cover"))
         self._dl_cover.setChecked(self._config.download_cover)
-        self._dl_metadata = QCheckBox("元数据")
+        self._dl_metadata = QCheckBox(t("metadata"))
         self._dl_metadata.setChecked(self._config.download_metadata)
         r_dl = QHBoxLayout()
         r_dl.addWidget(self._dl_danmaku)
@@ -139,7 +140,7 @@ class SettingsDialog(QDialog):
         r_dl.addWidget(self._dl_cover)
         r_dl.addWidget(self._dl_metadata)
         r_dl.addStretch()
-        form.addRow("默认选择:", r_dl)
+        form.addRow(t("default_options"), r_dl)
 
         form.addRow(_sep())
 
@@ -156,10 +157,10 @@ class SettingsDialog(QDialog):
         self._ffmpeg = QLineEdit(ffmpeg_display)
         self._ffmpeg.setPlaceholderText("自动检测系统 FFmpeg 或手动输入路径")
         ff_row.addWidget(self._ffmpeg, 1)
-        browse = QPushButton("浏览...")
+        browse = QPushButton(t("ffmpeg_browse"))
         browse.clicked.connect(self._browse)
         ff_row.addWidget(browse)
-        form.addRow("路径:", ff_row)
+        form.addRow(t("ffmpeg_path"), ff_row)
 
         try:
             ok, msg = FFmpegManager.check_available(self._config.ffmpeg_path or None)
@@ -200,4 +201,4 @@ class SettingsDialog(QDialog):
             self.accept()
         except Exception as e:
             from PySide6.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "保存失败", str(e))
+            QMessageBox.warning(self, t("error"), str(e))

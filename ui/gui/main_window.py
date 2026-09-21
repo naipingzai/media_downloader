@@ -19,14 +19,7 @@ from .widgets.feature_panel import FeaturePanel
 from .widgets.video_info import VideoInfoWidget
 from .widgets.collect_result import OutputResultView
 from .widgets.result_view import ResultView
-
-
-PLATFORM_LABELS = {
-    "douyin": "抖音",
-    "kuaishou": "快手",
-    "xiaohongshu": "小红书",
-    "bilibili": "B站",
-}
+from shared.core.i18n import t, platform_name
 
 
 class MainWindow(QMainWindow):
@@ -59,20 +52,20 @@ class MainWindow(QMainWindow):
         sb.setContentsMargins(18, 22, 18, 18)
         sb.setSpacing(10)
 
-        brand_title = QLabel("MediaDownloader")
+        brand_title = QLabel(t("app_name"))
         brand_title.setObjectName("BrandTitle")
-        brand_caption = QLabel("多平台媒体下载")
+        brand_caption = QLabel(t("subtitle"))
         brand_caption.setObjectName("MutedLabel")
         sb.addWidget(brand_title)
         sb.addWidget(brand_caption)
         sb.addSpacing(16)
 
-        section = QLabel("平台选择")
+        section = QLabel(t("platforms"))
         section.setObjectName("NavSection")
         sb.addWidget(section)
         self._platform_btns = []
         for pid in PlatformBus.list_platforms():
-            label = PLATFORM_LABELS.get(pid, pid.title())
+            label = platform_name(pid)
             btn = QPushButton(f"  {label}")
             btn.setObjectName("NavButton")
             btn.clicked.connect(lambda checked, p=pid: self._select_platform(p))
@@ -95,7 +88,7 @@ class MainWindow(QMainWindow):
         version_label.setObjectName("Caption")
         sb.addWidget(version_label)
         sb.addSpacing(4)
-        self._login_btn = QPushButton("登录 / Cookie")
+        self._login_btn = QPushButton(t("login_cookie"))
         self._login_btn.setObjectName("SidebarAction")
         self._login_btn.clicked.connect(self._open_login)
         sb.addWidget(self._login_btn)
@@ -111,8 +104,8 @@ class MainWindow(QMainWindow):
         header = QHBoxLayout()
         ht = QVBoxLayout()
         ht.setSpacing(2)
-        ht.addWidget(QLabel("下载控制台"))
-        page_sub = QLabel("支持抖音、快手、小红书、B站的媒体下载与采集工具")
+        ht.addWidget(QLabel(t("download_console")))
+        page_sub = QLabel(t("download_console_desc"))
         page_sub.setObjectName("Caption")
         ht.addWidget(page_sub)
         header.addLayout(ht)
@@ -122,9 +115,9 @@ class MainWindow(QMainWindow):
         hero = HeroPanel(workspace)
         hl = QVBoxLayout(hero)
         hl.setContentsMargins(28, 10, 28, 10)
-        self._hero_title = QLabel("MediaDownloader")
+        self._hero_title = QLabel(t("app_name"))
         self._hero_title.setObjectName("HeroTitle")
-        self._hero_sub = QLabel("选择平台开始")
+        self._hero_sub = QLabel(t("select_platform_start"))
         self._hero_sub.setObjectName("Caption")
         hl.addWidget(self._hero_title)
         hl.addWidget(self._hero_sub)
@@ -198,16 +191,16 @@ class MainWindow(QMainWindow):
         self._current_platform = platform
         features = PlatformBus.get_features(platform)
         self._feature_panel.set_features(features)
-        label = PLATFORM_LABELS.get(platform, platform.title())
+        label = platform_name(platform)
         self._hero_title.setText(label)
-        self._hero_sub.setText(f"{len(features)} 个功能可用")
+        self._hero_sub.setText(t("features_available", count=len(features)))
         self._video_info.show_empty()
         self._result_view.clear()
         self._output_result.show_empty()
 
     def _open_login(self):
         if not self._current_platform:
-            self.statusBar().showMessage("请先选择平台")
+            self.statusBar().showMessage(t("select_platform_hint"))
             return
         ops = PlatformBus.get_ops(self._current_platform)
         hint = ops.cookie_hint if ops else ""
@@ -229,11 +222,11 @@ class MainWindow(QMainWindow):
 
     def _on_preview(self, url):
         if not url.strip():
-            self.statusBar().showMessage("请输入链接")
+            self.statusBar().showMessage(t("input_url_hint"))
             return
         self._result_view.clear()
         self._output_result.show_empty()
-        label = PLATFORM_LABELS.get(self._current_platform, self._current_platform)
+        label = platform_name(self._current_platform)
         self._result_view.append(f"[{label}] 正在解析...")
         import asyncio
         from shared.core.session import create_async_client
@@ -274,11 +267,11 @@ class MainWindow(QMainWindow):
 
     def _on_execute(self, feature_id, url, opts=None):
         if not self._current_platform:
-            self.statusBar().showMessage("请先选择平台")
+            self.statusBar().showMessage(t("select_platform_hint"))
             return
         self._result_view.clear()
         self._output_result.show_empty()
-        label = PLATFORM_LABELS.get(self._current_platform, self._current_platform)
+        label = platform_name(self._current_platform)
         self._result_view.append(f"[{label}] 执行 {feature_id}...")
         cookie = self._cm.get(self._current_platform)
         save_dir = VOLUME / self._current_platform

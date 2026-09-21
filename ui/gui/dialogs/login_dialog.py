@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QCheckBox, QDialog, QHBoxLayout, QLabel, QLineEdit,
     QMessageBox, QPushButton, QTabWidget, QTextEdit, QVBoxLayout, QWidget,
 )
+from shared.core.i18n import t, platform_name
 from shared.core.cookies import CookieManager
 
 # 平台 → login 模块路径
@@ -42,13 +43,13 @@ class LoginDialog(QDialog):
         layout.setContentsMargins(20, 16, 20, 16)
         layout.setSpacing(12)
 
-        title = QLabel(f"{self._platform.title()} 登录")
+        title = QLabel(t("login_title", platform=platform_name(self._platform)))
         title.setStyleSheet("font-size: 18px; font-weight: bold; color: #facc15;")
         layout.addWidget(title)
 
-        status = "已设置" if current else "未设置"
+        status = t("status_set") if current else t("status_unset")
         color = "#22c55e" if current else "#ef4444"
-        self._status = QLabel(f"当前状态: {status} ({len(current)}字符)")
+        self._status = QLabel(t("current_status", status=status, count=len(current)))
         self._status.setStyleSheet(f"color: {color}; font-weight: bold;")
         layout.addWidget(self._status)
 
@@ -57,17 +58,17 @@ class LoginDialog(QDialog):
         # Tab 1: QR code (all platforms)
         qr_tab = QWidget()
         qr_layout = QVBoxLayout(qr_tab)
-        qr_layout.addWidget(QLabel(f"使用 {self._platform.title()} App 扫描二维码登录"))
-        self._qr_label = QLabel("点击下方按钮生成二维码")
+        qr_layout.addWidget(QLabel(t("qr_scan_hint", platform=platform_name(self._platform))))
+        self._qr_label = QLabel(t("click_to_generate"))
         self._qr_label.setAlignment(Qt.AlignCenter)
         self._qr_label.setMinimumHeight(200)
         self._qr_label.setStyleSheet("background: white; border-radius: 8px; padding: 10px;")
         qr_layout.addWidget(self._qr_label)
         qr_btns = QHBoxLayout()
-        self._qr_gen_btn = QPushButton("生成二维码")
+        self._qr_gen_btn = QPushButton(t("generate_qr"))
         self._qr_gen_btn.clicked.connect(self._generate_qr)
         qr_btns.addWidget(self._qr_gen_btn)
-        self._qr_refresh_btn = QPushButton("刷新")
+        self._qr_refresh_btn = QPushButton(t("refresh"))
         self._qr_refresh_btn.clicked.connect(self._generate_qr)
         self._qr_refresh_btn.setEnabled(False)
         qr_btns.addWidget(self._qr_refresh_btn)
@@ -88,10 +89,10 @@ class LoginDialog(QDialog):
         self._cookie_input.setMaximumHeight(100)
         cookie_layout.addWidget(self._cookie_input)
         cookie_btns = QHBoxLayout()
-        save_btn = QPushButton("保存 Cookie")
+        save_btn = QPushButton(t("save_cookie"))
         save_btn.clicked.connect(self._save_cookie)
         cookie_btns.addWidget(save_btn)
-        clear_btn = QPushButton("清除")
+        clear_btn = QPushButton(t("clear"))
         clear_btn.clicked.connect(self._clear_cookie)
         cookie_btns.addWidget(clear_btn)
         cookie_layout.addLayout(cookie_btns)
@@ -119,7 +120,7 @@ class LoginDialog(QDialog):
             pixmap = QPixmap()
             pixmap.loadFromData(buf.getvalue())
             self._qr_label.setPixmap(pixmap.scaled(200, 200, Qt.KeepAspectRatio))
-            self._qr_status.setText(f"请用 {self._platform.title()} App 扫描二维码")
+            self._qr_status.setText(t("qr_scanning", platform=platform_name(self._platform)))
             self._qr_status.setStyleSheet("color: #22d3ee;")
             self._qr_gen_btn.setEnabled(False)
             self._qr_refresh_btn.setEnabled(True)
@@ -145,16 +146,16 @@ class LoginDialog(QDialog):
                     self._cm.set(self._platform, cookie_str)
                     self._status.setText(f"当前状态: 已设置 ({len(cookie_str)}字符)")
                     self._status.setStyleSheet("color: #22c55e; font-weight: bold;")
-                    self._qr_status.setText("登录成功!")
+                    self._qr_status.setText(t("qr_success"))
                     self._qr_status.setStyleSheet("color: #22c55e; font-weight: bold;")
                 else:
                     self._qr_status.setText("登录成功但未获取到Cookie")
             elif status_code == 86090:  # 等待确认
-                self._qr_status.setText("已扫码,等待确认...")
+                self._qr_status.setText(t("qr_scanned"))
                 self._qr_status.setStyleSheet("color: #facc15;")
             elif status_code == 86038:  # 过期
                 self._poll_timer.stop()
-                self._qr_status.setText("二维码已过期,请刷新")
+                self._qr_status.setText(t("qr_expired"))
                 self._qr_status.setStyleSheet("color: #ef4444;")
                 self._qr_gen_btn.setEnabled(True)
         except Exception as e:
@@ -164,17 +165,17 @@ class LoginDialog(QDialog):
     def _save_cookie(self):
         text = self._cookie_input.toPlainText().strip()
         if not text:
-            QMessageBox.warning(self, "提示", "请输入 Cookie")
+            QMessageBox.warning(self, t("ok"), t("cookie_empty_warn"))
             return
         self._cm.set(self._platform, text)
         self._status.setText(f"当前状态: 已设置 ({len(text)}字符)")
         self._status.setStyleSheet("color: #22c55e; font-weight: bold;")
-        QMessageBox.information(self, "成功", "Cookie 已保存")
+        QMessageBox.information(self, t("ok"), t("cookie_saved"))
 
     def _clear_cookie(self):
         self._cm.set(self._platform, "")
         self._cookie_input.clear()
-        self._status.setText("当前状态: 未设置")
+        self._status.setText(t("current_status", status=t("status_unset"), count=0))
         self._status.setStyleSheet("color: #ef4444; font-weight: bold;")
 
     def closeEvent(self, event):

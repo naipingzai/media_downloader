@@ -1,5 +1,6 @@
 """输出结果展示 — 下载状态/来源/路径 或 采集数据。"""
 from PySide6.QtCore import Qt
+from shared.core.i18n import t
 from PySide6.QtWidgets import (
     QHeaderView, QLabel, QTableWidget, QTableWidgetItem,
     QVBoxLayout, QWidget,
@@ -19,7 +20,7 @@ class OutputResultView(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 12, 16, 12)
         layout.setAlignment(Qt.AlignTop)
-        self._title = QLabel("输出结果")
+        self._title = QLabel(t("output_result"))
         self._title.setObjectName("SectionTitle")
         self._title.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         layout.addWidget(self._title)
@@ -35,7 +36,7 @@ class OutputResultView(QWidget):
         layout.addWidget(self._table)
 
     def show_empty(self):
-        self._title.setText("输出结果")
+        self._title.setText(t("output_result"))
         self._table.setRowCount(0)
         self._table.setColumnCount(3)
         self._table.setHorizontalHeaderLabels(["状态", "来源", "路径"])
@@ -48,7 +49,7 @@ class OutputResultView(QWidget):
         self._table.setItem(row, 1, QTableWidgetItem(source))
         self._table.setItem(row, 2, QTableWidgetItem(path))
 
-    def set_download_results(self, files, title="下载结果"):
+    def set_download_results(self, files, title=t("download_ok")):
         """批量设置下载结果。"""
         self._title.setText(title)
         self._table.setRowCount(0)
@@ -57,7 +58,7 @@ class OutputResultView(QWidget):
         for f in files:
             self.append_download("✓ 完成", "", f)
 
-    def set_download_log(self, log_lines, title="下载结果"):
+    def set_download_log(self, log_lines, title=t("download_ok")):
         """从下载日志中提取结果。"""
         self._title.setText(title)
         self._table.setRowCount(0)

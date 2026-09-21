@@ -1,5 +1,6 @@
 """解析结果卡片。"""
 from PySide6.QtCore import Qt
+from shared.core.i18n import t
 from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
 )
@@ -16,10 +17,10 @@ class VideoInfoWidget(QWidget):
         header = QHBoxLayout()
         header.setContentsMargins(14, 10, 14, 4)
         header.setSpacing(6)
-        self._title_label = QLabel("作品资料卡")
+        self._title_label = QLabel(t("video_info"))
         self._title_label.setObjectName("SectionTitle")
         header.addWidget(self._title_label)
-        self._state = QLabel("(等待解析)")
+        self._state = QLabel("(" + t("waiting_parse") + ")")
         self._state.setObjectName("Caption")
         header.addWidget(self._state)
         header.addStretch()
@@ -32,7 +33,7 @@ class VideoInfoWidget(QWidget):
         self._inner_layout = QVBoxLayout(inner)
         self._inner_layout.setContentsMargins(14, 4, 14, 12)
         self._inner_layout.setSpacing(8)
-        self._info = QLabel("输入链接后点击 解析预览 查看作品信息")
+        self._info = QLabel(t("parse_hint"))
         self._info.setWordWrap(True)
         self._info.setStyleSheet("color: #64748b;")
         self._inner_layout.addWidget(self._info)
@@ -45,7 +46,7 @@ class VideoInfoWidget(QWidget):
         outer.addWidget(scroll)
 
     def show_work(self, work):
-        self._state.setText("(已解析)")
+        self._state.setText("(" + t("parsed") + ")")
         self._state.setStyleSheet("color: #22c55e; font-weight: bold;")
         lines = [
             f"标题: {work.get('title', '')}",
@@ -61,13 +62,13 @@ class VideoInfoWidget(QWidget):
         self._info.setVisible(False)
 
     def show_empty(self):
-        self._state.setText("(等待解析)")
+        self._state.setText("(" + t("waiting_parse") + ")")
         self._state.setStyleSheet("color: #64748b;")
         self._detail.setVisible(False)
         self._info.setVisible(True)
 
     def show_error(self, msg):
-        self._state.setText("(解析失败)")
+        self._state.setText("(" + t("parse_failed") + ")")
         self._state.setStyleSheet("color: #ef4444; font-weight: bold;")
         self._info.setText(msg)
         self._info.setVisible(True)

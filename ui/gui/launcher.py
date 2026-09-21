@@ -18,6 +18,9 @@ def launch():
     from .resources.theme import apply_theme
     apply_theme(app, dark=True)
 
+    from shared.core.i18n import load_lang
+    load_lang()
+
     style_path = ROOT / "ui" / "gui" / "resources" / "styles.qss"
     if style_path.is_file():
         app.setStyleSheet(style_path.read_text(encoding="utf-8"))
