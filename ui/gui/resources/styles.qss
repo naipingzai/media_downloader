@@ -6,8 +6,10 @@ QMainWindow { background: #0f172a; }
 #Panel {
     background: #1e293b;
     border: 2px solid #64748b;
-    border-radius: 8px;
+    border-radius: 6px;
 }
+QScrollArea { background: transparent; border: none; }
+QScrollArea > QWidget > QWidget { background: transparent; }
 SectionTitle { color: #22d3ee; font-weight: bold; font-size: 14px; }
 QPushButton { background: #334155; color: #e2e8f0; border: none; border-radius: 6px; padding: 8px 16px; }
 QPushButton:hover { background: #475569; }

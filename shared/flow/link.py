@@ -70,7 +70,7 @@ class LinkExtractor:
         """短链接通过HTTP重定向获取最终URL。"""
         short_domains = [
             "v.douyin.com", "v.kuaishou.com", "xhslink.com", "xhslink.cn",
-            "vm.tiktok.com", "vt.tiktok.com",
+            "vm.tiktok.com", "vt.tiktok.com", "b23.tv",
         ]
         parsed = urlparse(url)
         if any(d in parsed.netloc for d in short_domains):
