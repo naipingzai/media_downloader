@@ -22,6 +22,9 @@ class DouyinAdapter(PlatformAdapter):
         self.proxy = self.config.proxy
         d = cookie_str_to_dict(self.cookie)
         self.uifid = next((v for k, v in d.items() if k.lower() == "uifid"), "")
+        if not self.uifid:
+            import uuid
+            self.uifid = str(uuid.uuid4())
 
     def get_config_schema(self) -> dict:
         return {"cookie": {"type": "str", "label": "Cookie"}, "proxy": {"type": "str", "label": "Proxy"}}
