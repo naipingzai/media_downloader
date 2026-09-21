@@ -179,13 +179,20 @@ class MainWindow(QMainWindow):
         shell.addWidget(workspace, 1)
 
     def _setup_status_bar(self):
-        self._status_platform = QLabel("")
-        self._status_feature = QLabel("")
-        self._status_cookie = QLabel("")
-        self.statusBar().addPermanentWidget(self._status_platform)
-        self.statusBar().addPermanentWidget(self._status_feature)
-        self.statusBar().addPermanentWidget(self._status_cookie)
+        self.statusBar().setObjectName("StatusBar")
         self.statusBar().showMessage(f"{PROJECT_NAME} v{__VERSION__}")
+        # 右侧永久信息
+        self._status_ffmpeg = QLabel("")
+        self._status_dir = QLabel("")
+        self._status_dir.setObjectName("Caption")
+        self.statusBar().addPermanentWidget(self._status_dir)
+        self.statusBar().addPermanentWidget(self._status_ffmpeg)
+        # 初始化显示
+        from shared.core.ffmpeg import FFmpegManager
+        ok, ver = FFmpegManager.check_available()
+        self._status_ffmpeg.setText(f"FFmpeg {'✓' if ok else '✗'}")
+        self._status_ffmpeg.setStyleSheet(f"color: {'#22c55e' if ok else '#64748b'}; font-size: 11px;")
+        self._status_dir.setText(f"📁 {VOLUME}")
 
     def _select_platform(self, platform):
         self._current_platform = platform
@@ -194,12 +201,6 @@ class MainWindow(QMainWindow):
         label = PLATFORM_LABELS.get(platform, platform.title())
         self._hero_title.setText(label)
         self._hero_sub.setText(f"{len(features)} 个功能可用")
-        ops = PlatformBus.get_ops(platform)
-        cookie = self._cm.get(platform)
-        hint = ops.cookie_hint if ops else ""
-        cookie_text = f"Cookie: {'已设置 ' + str(len(cookie)) + '字符' if cookie else '未设置'}" if hint else "Cookie: 不需要"
-        self._status_platform.setText(f"平台: {platform}")
-        self._status_cookie.setText(cookie_text)
         self._video_info.show_empty()
         self._result_view.clear()
         self._output_result.show_empty()
@@ -216,8 +217,6 @@ class MainWindow(QMainWindow):
         # 对话框保存了新 cookie，重新加载
         self._cm = CookieManager()
         cookie = self._cm.get(self._current_platform)
-        cookie_text = f"Cookie: {'已设置 ' + str(len(cookie)) + '字符' if cookie else '未设置'}"
-        self._status_cookie.setText(cookie_text)
 
     def _open_settings(self):
         SettingsDialog(self).exec()
@@ -236,7 +235,6 @@ class MainWindow(QMainWindow):
         self._output_result.show_empty()
         label = PLATFORM_LABELS.get(self._current_platform, self._current_platform)
         self._result_view.append(f"[{label}] 正在解析...")
-        self._status_feature.setText("功能: 解析预览")
         import asyncio
         from shared.core.session import create_async_client
         from shared.flow.link import LinkExtractor
@@ -282,7 +280,6 @@ class MainWindow(QMainWindow):
         self._output_result.show_empty()
         label = PLATFORM_LABELS.get(self._current_platform, self._current_platform)
         self._result_view.append(f"[{label}] 执行 {feature_id}...")
-        self._status_feature.setText(f"功能: {feature_id}")
         cookie = self._cm.get(self._current_platform)
         save_dir = VOLUME / self._current_platform
         save_dir.mkdir(parents=True, exist_ok=True)
