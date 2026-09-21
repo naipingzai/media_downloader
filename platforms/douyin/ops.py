@@ -45,18 +45,21 @@ class DouyinOps(PlatformOps):
             if not links:
                 return FeatureResult(False, "未提取到有效链接")
             log, files = [], []
+            def _log(msg):
+                log.append(msg)
+                self.log(msg)
             for i, link in enumerate(links, 1):
-                log.append(f"[{i}/{len(links)}] {link.url[:60]}")
+                _log(f"[{i}/{len(links)}] {link.url[:60]}")
                 raw = await adapter.request_detail(link)
                 if not raw:
-                    log.append("  获取详情失败"); continue
+                    _log("  获取详情失败"); continue
                 work = adapter.parse_detail(raw)
                 if not work:
-                    log.append("  解析失败"); continue
-                log.append(f"  {work['author_name']}: {work['title'][:40]}")
+                    _log("  解析失败"); continue
+                _log(f"  {work['author_name']}: {work['title'][:40]}")
                 urls = adapter.get_download_urls(work)
                 if not urls:
-                    log.append("  无下载地址"); continue
+                    _log("  无下载地址"); continue
                 target = storage.resolve(work)
                 dlc = create_async_client()
                 try:
@@ -65,11 +68,11 @@ class DouyinOps(PlatformOps):
                 finally:
                     await dlc.close()
                 if result:
-                    log.append(f"  ✓ {result}")
+                    _log(f"  ✓ {result}")
                     storage.record_download(link.work_id)
                     files.append(str(result))
                 else:
-                    log.append("  ✗ 下载失败")
+                    _log("  ✗ 下载失败")
             return FeatureResult(True, f"处理 {len(links)} 个链接", log=log, files=files)
         finally:
             await adapter.close()
@@ -331,14 +334,12 @@ class DouyinOps(PlatformOps):
                 aweme_id = aw.get("aweme_id", "")
                 desc = aw.get("desc", "")[:40]
                 author = aw.get("author", {}).get("nickname", "unknown")
-                # 构造 storage 期望的 work dict
                 work = {
-                    "platform": "douyin",
-                    "work_id": aweme_id,
-                    "title": desc or "untitled",
-                    "author_name": author,
+                    "platform": "douyin", "work_id": aweme_id,
+                    "title": desc or "untitled", "author_name": author,
                 }
-                log.append(f"  [{i}/{len(aweme_list)}] {author}: {desc}")
+                msg = f"  [{i}/{len(aweme_list)}] {author}: {desc}"
+                log.append(msg); self.log(msg)
                 video = aw.get("video", {})
                 play = video.get("play_addr", {}).get("url_list", [])
                 bit_rate = video.get("bit_rate", [])
@@ -346,15 +347,16 @@ class DouyinOps(PlatformOps):
                     best = max(bit_rate, key=lambda x: x.get("bit_rate", 0))
                     play = best.get("play_addr", {}).get("url_list", []) or play
                 if not play:
-                    log.append("    无下载地址"); continue
+                    msg = "    无下载地址"; log.append(msg); self.log(msg); continue
                 target = storage.resolve(work)
                 result = await dl.download_file(play[0], target.name)
                 if result:
-                    log.append(f"    ✓ {target.name}")
+                    msg = f"    ✓ {target.name}"
+                    log.append(msg); self.log(msg)
                     storage.record_download(aweme_id)
                     files.append(str(result))
                 else:
-                    log.append(f"    ✗ 下载失败")
+                    msg = "    ✗ 下载失败"; log.append(msg); self.log(msg)
         finally:
             await dlc.close()
         return FeatureResult(True, f"批量下载 {len(files)}/{len(aweme_list)} 个", log=log, files=files)

@@ -37,18 +37,21 @@ class KuaishouOps(PlatformOps):
             if not links:
                 return FeatureResult(False, "未提取到有效链接")
             log, files = [], []
+            def _log(msg):
+                log.append(msg)
+                self.log(msg)
             for i, link in enumerate(links, 1):
-                log.append(f"[{i}/{len(links)}] {link.url[:60]}")
+                _log(f"[{i}/{len(links)}] {link.url[:60]}")
                 raw = await adapter.request_detail(link)
                 if not raw:
-                    log.append("  获取详情失败"); continue
+                    _log("  获取详情失败"); continue
                 work = adapter.parse_detail(raw)
                 if not work:
-                    log.append("  解析失败"); continue
-                log.append(f"  {work.get('author_name', '?')}: {work.get('title', '')[:40]}")
+                    _log("  解析失败"); continue
+                _log(f"  {work.get('author_name', '?')}: {work.get('title', '')[:40]}")
                 urls = adapter.get_download_urls(work)
                 if not urls:
-                    log.append("  无下载地址"); continue
+                    _log("  无下载地址"); continue
                 target = storage.resolve(work)
                 dlc = create_async_client()
                 try:
@@ -57,10 +60,10 @@ class KuaishouOps(PlatformOps):
                 finally:
                     await dlc.close()
                 if result:
-                    log.append(f"  ✓ {result}")
+                    _log(f"  ✓ {result}")
                     files.append(str(result))
                 else:
-                    log.append("  ✗ 下载失败")
+                    _log("  ✗ 下载失败")
             return FeatureResult(True, f"处理 {len(links)} 个链接", log=log, files=files)
         finally:
             await adapter.close()
@@ -72,21 +75,25 @@ class KuaishouOps(PlatformOps):
             user_id = url.strip().rstrip("/").split("/")[-1]
             if not user_id:
                 return FeatureResult(False, "无法提取用户ID")
-            log = [f"用户: {user_id}"]
+            log = []
+            def _log(msg):
+                log.append(msg)
+                self.log(msg)
+            _log(f"用户: {user_id}")
             videos = await adapter.fetch_user_videos(user_id)
             if not videos:
                 return FeatureResult(False, "获取用户作品失败或为空", log=log)
-            log.append(f"共 {len(videos)} 个视频")
+            _log(f"共 {len(videos)} 个视频")
             from shared.flow.download import FileDownloader
             from shared.core.session import create_async_client
             files = []
             for i, v in enumerate(videos, 1):
                 title = v.get("caption", "")[:40] or v.get("title", "")[:40] or "unknown"
                 photo_id = v.get("photoId", "") or v.get("id", "")
-                log.append(f"[{i}/{len(videos)}] {title}")
+                _log(f"[{i}/{len(videos)}] {title}")
                 video_url = v.get("mainMvUrl", "") or v.get("url", "")
                 if not video_url:
-                    log.append("  无下载地址"); continue
+                    _log("  无下载地址"); continue
                 work = {"platform": "kuaishou", "work_id": photo_id, "title": title,
                         "author_name": user_id}
                 target = storage.resolve(work)
@@ -97,10 +104,10 @@ class KuaishouOps(PlatformOps):
                 finally:
                     await dlc.close()
                 if result:
-                    log.append(f"  ✓ {result}")
+                    _log(f"  ✓ {result}")
                     files.append(str(result))
                 else:
-                    log.append("  ✗ 下载失败")
+                    _log("  ✗ 下载失败")
             return FeatureResult(True, f"用户 {user_id} 共下载 {len(files)} 个视频", log=log, files=files)
         finally:
             await adapter.close()
