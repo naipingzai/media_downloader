@@ -4,8 +4,6 @@ from string import ascii_uppercase
 from string import digits
 from time import time
 
-from rich import print
-
 __all__ = [
     "VerifyFp",
 ]

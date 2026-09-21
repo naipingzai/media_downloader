@@ -9,7 +9,6 @@ from .constants import (
     DATA_HEADERS, DATA_HEADERS_TIKTOK,
     DOWNLOAD_HEADERS, DOWNLOAD_HEADERS_TIKTOK,
 )
-from .console import ColorfulConsole
 from .cleaner import Cleaner
 from .retry import Retry
 from .progress import FakeProgress
@@ -25,7 +24,7 @@ __all__ = [
     "__VERSION__", "PROJECT_NAME", "REPOSITORY", "LICENCE", "RELEASES",
     "DOCUMENTATION_URL", "DISCLAIMER_TEXT", "IMPERSONATE",
     "MASTER", "PROMPT", "GENERAL", "PROGRESS", "ERROR", "WARNING", "INFO", "DEBUG",
-    "ColorfulConsole", "Cleaner", "Retry", "FakeProgress", "FileSignature",
+    "Cleaner", "Retry", "FakeProgress", "FileSignature",
     "create_async_client", "create_sync_client",
     "cookie_str_to_dict", "cookie_dict_to_str", "format_size",
     "beautify_string", "trim_string",
