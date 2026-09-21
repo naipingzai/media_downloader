@@ -82,6 +82,7 @@ class FeaturePanel(QWidget):
     def set_features(self, features):
         self.fn_combo.blockSignals(True)
         self.fn_combo.clear()
+        self.url_input.clear()
         for f in features:
             self.fn_combo.addItem(f.name, f.id)
         self.fn_combo.blockSignals(False)

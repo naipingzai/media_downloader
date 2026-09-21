@@ -233,7 +233,10 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("请输入链接")
             return
         self._result_view.clear()
-        self._result_view.append("正在解析...")
+        self._output_result.show_empty()
+        label = PLATFORM_LABELS.get(self._current_platform, self._current_platform)
+        self._result_view.append(f"[{label}] 正在解析...")
+        self._status_feature.setText("功能: 解析预览")
         import asyncio
         from shared.core.session import create_async_client
         from shared.flow.link import LinkExtractor
@@ -276,7 +279,9 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("请先选择平台")
             return
         self._result_view.clear()
-        self._result_view.append(f"执行: {feature_id}")
+        self._output_result.show_empty()
+        label = PLATFORM_LABELS.get(self._current_platform, self._current_platform)
+        self._result_view.append(f"[{label}] 执行 {feature_id}...")
         self._status_feature.setText(f"功能: {feature_id}")
         cookie = self._cm.get(self._current_platform)
         save_dir = VOLUME / self._current_platform
