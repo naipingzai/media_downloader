@@ -17,7 +17,7 @@ from .threads.worker import FeatureWorker
 from .widgets.hero_panel import HeroPanel
 from .widgets.feature_panel import FeaturePanel
 from .widgets.video_info import VideoInfoWidget
-from .widgets.collect_result import CollectResultView
+from .widgets.collect_result import OutputResultView
 from .widgets.result_view import ResultView
 
 
@@ -141,18 +141,18 @@ class MainWindow(QMainWindow):
         self._feature_panel.execute_clicked.connect(self._on_execute)
         self._feature_panel.preview_clicked.connect(self._on_preview)
 
-        self._collect_result = CollectResultView(workspace)
+        self._output_result = OutputResultView(workspace)
         self._result_view = ResultView(workspace)
 
         # 固定最小高度，防止布局跳动
         self._video_info.setMinimumHeight(180)
-        self._collect_result.setMinimumHeight(180)
+        self._output_result.setMinimumHeight(180)
         self._feature_panel.setMinimumHeight(240)
         self._result_view.setMinimumHeight(240)
 
         # 第0行: 作品资料卡 | 采集结果
         content_grid.addWidget(self._video_info, 0, 0)
-        content_grid.addWidget(self._collect_result, 0, 1)
+        content_grid.addWidget(self._output_result, 0, 1)
         # 第1行: 功能与参数 | 执行日志
         content_grid.addWidget(self._feature_panel, 1, 0)
         content_grid.addWidget(self._result_view, 1, 1)
@@ -202,7 +202,7 @@ class MainWindow(QMainWindow):
         self._status_cookie.setText(cookie_text)
         self._video_info.show_empty()
         self._result_view.clear()
-        self._collect_result.show_empty()
+        self._output_result.show_empty()
 
     def _open_login(self):
         if not self._current_platform:
@@ -290,16 +290,21 @@ class MainWindow(QMainWindow):
         self._result_view.set_result(result)
         if result.get("success"):
             self.statusBar().showMessage(result.get("message", "完成"))
+            # 下载结果 → 输出结果面板
+            files = result.get("files", [])
+            if files:
+                self._output_result.set_download_results(files, result.get("message", "下载结果"))
+            # 采集数据 → 输出结果面板
             data = result.get("data")
             if data and isinstance(data, list) and len(data) > 0:
                 d = data[0]
                 if "word" in d:
-                    self._collect_result.show_hot_list(data)
+                    self._output_result.show_hot_list(data)
                 elif "user" in d and "text" in d:
-                    self._collect_result.show_comments(data)
+                    self._output_result.show_comments(data)
                 elif "title" in d and "author" in d:
-                    self._collect_result.show_search(data)
+                    self._output_result.show_search(data)
             elif data and isinstance(data, dict):
-                self._collect_result.show_user(data)
+                self._output_result.show_user(data)
         else:
             self.statusBar().showMessage(f"失败: {result.get('message', '')}")

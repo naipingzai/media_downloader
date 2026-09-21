@@ -81,11 +81,23 @@ class DouyinOps(PlatformOps):
             sec_uid = await self._resolve_sec_uid(adapter, url)
             if not sec_uid:
                 return FeatureResult(False, "无法获取用户信息，请输入用户主页链接")
-            data = await adapter.fetch_user_posts(sec_uid)
-            if not data:
-                return FeatureResult(False, "获取作品列表失败")
-            aweme_list = data.get("aweme_list", [])
-            return await self._batch_download(adapter, aweme_list, storage)
+            # 分页获取所有作品
+            all_awemes = []
+            max_cursor = "0"
+            for _ in range(50):  # 最多50页
+                data = await adapter.fetch_user_posts(sec_uid, count=20, max_cursor=max_cursor)
+                if not data:
+                    break
+                awemes = data.get("aweme_list", [])
+                if not awemes:
+                    break
+                all_awemes.extend(awemes)
+                if not data.get("has_more", False):
+                    break
+                max_cursor = str(data.get("max_cursor", ""))
+            if not all_awemes:
+                return FeatureResult(False, "获取作品列表失败或为空")
+            return await self._batch_download(adapter, all_awemes, storage)
         finally:
             await adapter.close()
 
@@ -318,7 +330,15 @@ class DouyinOps(PlatformOps):
             for i, aw in enumerate(aweme_list, 1):
                 aweme_id = aw.get("aweme_id", "")
                 desc = aw.get("desc", "")[:40]
-                log.append(f"  [{i}] {desc}")
+                author = aw.get("author", {}).get("nickname", "unknown")
+                # 构造 storage 期望的 work dict
+                work = {
+                    "platform": "douyin",
+                    "work_id": aweme_id,
+                    "title": desc or "untitled",
+                    "author_name": author,
+                }
+                log.append(f"  [{i}/{len(aweme_list)}] {author}: {desc}")
                 video = aw.get("video", {})
                 play = video.get("play_addr", {}).get("url_list", [])
                 bit_rate = video.get("bit_rate", [])
@@ -327,14 +347,14 @@ class DouyinOps(PlatformOps):
                     play = best.get("play_addr", {}).get("url_list", []) or play
                 if not play:
                     log.append("    无下载地址"); continue
-                target = storage.resolve(aw)
+                target = storage.resolve(work)
                 result = await dl.download_file(play[0], target.name)
                 if result:
-                    log.append(f"    ✓ 完成")
+                    log.append(f"    ✓ {target.name}")
                     storage.record_download(aweme_id)
                     files.append(str(result))
                 else:
-                    log.append(f"    ✗ 失败")
+                    log.append(f"    ✗ 下载失败")
         finally:
             await dlc.close()
         return FeatureResult(True, f"批量下载 {len(files)}/{len(aweme_list)} 个", log=log, files=files)

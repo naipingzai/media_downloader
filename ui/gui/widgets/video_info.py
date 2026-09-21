@@ -1,6 +1,8 @@
 """解析结果卡片。"""
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
+)
 
 
 class VideoInfoWidget(QWidget):
@@ -8,27 +10,39 @@ class VideoInfoWidget(QWidget):
         super().__init__(parent)
         self.setObjectName("Panel")
         self.setAttribute(Qt.WA_StyledBackground, True)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 12, 16, 12)
-        layout.setSpacing(8)
-        layout.setAlignment(Qt.AlignTop)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
         header = QHBoxLayout()
+        header.setContentsMargins(16, 12, 16, 6)
         header.setSpacing(6)
         self._title_label = QLabel("作品资料卡")
+        self._title_label.setObjectName("SectionTitle")
         header.addWidget(self._title_label)
         self._state = QLabel("(等待解析)")
         self._state.setObjectName("Caption")
         header.addWidget(self._state)
         header.addStretch()
-        layout.addLayout(header)
+        outer.addLayout(header)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        inner = QWidget()
+        self._inner_layout = QVBoxLayout(inner)
+        self._inner_layout.setContentsMargins(16, 4, 16, 12)
+        self._inner_layout.setSpacing(8)
         self._info = QLabel("输入链接后点击 解析预览 查看作品信息")
         self._info.setWordWrap(True)
         self._info.setStyleSheet("color: #64748b;")
-        layout.addWidget(self._info)
+        self._inner_layout.addWidget(self._info)
         self._detail = QLabel("")
         self._detail.setWordWrap(True)
         self._detail.setVisible(False)
-        layout.addWidget(self._detail)
+        self._inner_layout.addWidget(self._detail)
+        self._inner_layout.addStretch()
+        scroll.setWidget(inner)
+        outer.addWidget(scroll)
 
     def show_work(self, work):
         self._state.setText("(已解析)")
