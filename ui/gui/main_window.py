@@ -247,18 +247,18 @@ class MainWindow(QMainWindow):
                             work = adapter.parse_detail(raw)
                             if work:
                                 self._video_info.show_work(work)
-                                self._result_view.append("解析成功", "#22c55e")
+                                self._result_view.append(t("parse_ok"), "#22c55e")
                             else:
                                 self._video_info.show_error("解析失败")
-                                self._result_view.append("解析失败", "#ef4444")
+                                self._result_view.append(t("parse_fail"), "#ef4444")
                         else:
                             self._video_info.show_error("获取详情失败")
                         await adapter.close()
                     else:
-                        self._result_view.append("平台适配器未找到", "#ef4444")
+                        self._result_view.append(t("adapter_not_found"), "#ef4444")
                 else:
                     self._video_info.show_error("未提取到有效链接")
-                    self._result_view.append("未提取到有效链接", "#ef4444")
+                    self._result_view.append(t("no_valid_link"), "#ef4444")
             finally:
                 await client.close()
         loop = asyncio.new_event_loop()

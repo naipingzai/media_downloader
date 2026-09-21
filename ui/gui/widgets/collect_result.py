@@ -32,14 +32,14 @@ class OutputResultView(QWidget):
         self._table.setWordWrap(True)
         self._table.setColumnCount(3)
         self._table.setRowCount(0)
-        self._table.setHorizontalHeaderLabels(["状态", "来源", "路径"])
+        self._table.setHorizontalHeaderLabels([t("status_col"), t("source_col"), t("path_col")])
         layout.addWidget(self._table)
 
     def show_empty(self):
         self._title.setText(t("output_result"))
         self._table.setRowCount(0)
         self._table.setColumnCount(3)
-        self._table.setHorizontalHeaderLabels(["状态", "来源", "路径"])
+        self._table.setHorizontalHeaderLabels([t("status_col"), t("source_col"), t("path_col")])
 
     def append_download(self, status, source, path=""):
         """追加一条下载结果。"""
@@ -54,7 +54,7 @@ class OutputResultView(QWidget):
         self._title.setText(title)
         self._table.setRowCount(0)
         self._table.setColumnCount(3)
-        self._table.setHorizontalHeaderLabels(["状态", "来源", "路径"])
+        self._table.setHorizontalHeaderLabels([t("status_col"), t("source_col"), t("path_col")])
         for f in files:
             self.append_download("✓ 完成", "", f)
 
@@ -63,7 +63,7 @@ class OutputResultView(QWidget):
         self._title.setText(title)
         self._table.setRowCount(0)
         self._table.setColumnCount(3)
-        self._table.setHorizontalHeaderLabels(["状态", "来源", "路径"])
+        self._table.setHorizontalHeaderLabels([t("status_col"), t("source_col"), t("path_col")])
         for line in log_lines:
             if "✓" in line:
                 self.append_download("✓ 完成", "", line.strip())
@@ -81,22 +81,22 @@ class OutputResultView(QWidget):
                 self._table.setItem(i, j, QTableWidgetItem(str(val)))
 
     def show_hot_list(self, data):
-        self.show_data("抖音热榜 TOP 20", ["排名", "关键词", "热度"],
+        self.show_data(t("hot_list"), [t("rank"), t("keyword"), t("hot_value")],
                        [[d["rank"], d["word"], d["hot_value"]] for d in data])
 
     def show_comments(self, data):
-        self.show_data("评论数据", ["用户", "内容", "点赞"],
+        self.show_data(t("comment_data"), [t("user"), t("content"), t("likes")],
                        [[d["user"], d["text"][:50], d["digg_count"]] for d in data])
 
     def show_search(self, data):
-        self.show_data("搜索结果", ["标题", "作者", "点赞"],
+        self.show_data(t("search_result"), [t("title_field"), t("author"), t("likes")],
                        [[d["title"][:40], d["author"], d["digg_count"]] for d in data])
 
     def show_user(self, data):
-        self.show_data("账号资料", ["字段", "值"], [
-            ["昵称", data.get("nickname", "")],
+        self.show_data(t("account_info"), [t("title_field"), t("yes")], [
+            [t("nickname"), data.get("nickname", "")],
             ["UID", data.get("uid", "")],
-            ["粉丝", data.get("follower_count", 0)],
-            ["作品数", data.get("aweme_count", 0)],
-            ["签名", data.get("signature", "")],
+            [t("followers"), data.get("follower_count", 0)],
+            [t("works"), data.get("aweme_count", 0)],
+            [t("signature"), data.get("signature", "")],
         ])
