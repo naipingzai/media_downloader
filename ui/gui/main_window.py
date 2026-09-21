@@ -213,6 +213,8 @@ class MainWindow(QMainWindow):
         current = self._cm.get(self._current_platform)
         dlg = LoginDialog(self._current_platform, hint, current, self)
         dlg.exec()
+        # 对话框保存了新 cookie，重新加载
+        self._cm = CookieManager()
         cookie = self._cm.get(self._current_platform)
         cookie_text = f"Cookie: {'已设置 ' + str(len(cookie)) + '字符' if cookie else '未设置'}"
         self._status_cookie.setText(cookie_text)
