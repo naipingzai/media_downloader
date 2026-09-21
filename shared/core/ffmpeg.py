@@ -1,12 +1,26 @@
-"""FFmpeg 检测和命令构建。"""
+"""FFmpeg detection and command builder — 支持系统/内置 FFmpeg。"""
 import logging
 import platform
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+
+def _bundled_candidates() -> list[Path]:
+    """PyInstaller 冻结后查找内置 FFmpeg。"""
+    if not getattr(sys, "frozen", False):
+        return []
+    exe_name = "ffmpeg.exe" if platform.system() == "Windows" else "ffmpeg"
+    exe_dir = Path(sys.executable).resolve().parent
+    candidates = [exe_dir / exe_name]
+    bundle_root = getattr(sys, "_MEIPASS", None)
+    if bundle_root:
+        candidates.append(Path(bundle_root) / exe_name)
+    return candidates
 
 
 class FFmpegManager:
@@ -18,9 +32,15 @@ class FFmpegManager:
             p = Path(custom_path)
             if p.is_file():
                 return p
+        # 优先查找内置 FFmpeg
+        for bp in _bundled_candidates():
+            if bp.is_file():
+                return bp
+        # 查找系统 FFmpeg
         found = shutil.which("ffmpeg")
         if found:
             return Path(found)
+        # 常见路径
         search = [
             Path("/usr/bin/ffmpeg"),
             Path("/usr/local/bin/ffmpeg"),
