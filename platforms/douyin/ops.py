@@ -327,28 +327,28 @@ class DouyinOps(PlatformOps):
         from shared.flow.download import FileDownloader
         from shared.core.session import create_async_client
         log, files = [], []
-        dlc = create_async_client()
-        try:
-            dl = FileDownloader(client=dlc, save_dir=storage.base_dir)
-            for i, aw in enumerate(aweme_list, 1):
-                aweme_id = aw.get("aweme_id", "")
-                desc = aw.get("desc", "")[:40]
-                author = aw.get("author", {}).get("nickname", "unknown")
-                work = {
-                    "platform": "douyin", "work_id": aweme_id,
-                    "title": desc or "untitled", "author_name": author,
-                }
-                msg = f"  [{i}/{len(aweme_list)}] {author}: {desc}"
-                log.append(msg); self.log(msg)
-                video = aw.get("video", {})
-                play = video.get("play_addr", {}).get("url_list", [])
-                bit_rate = video.get("bit_rate", [])
-                if bit_rate:
-                    best = max(bit_rate, key=lambda x: x.get("bit_rate", 0))
-                    play = best.get("play_addr", {}).get("url_list", []) or play
-                if not play:
-                    msg = "    无下载地址"; log.append(msg); self.log(msg); continue
-                target = storage.resolve(work)
+        for i, aw in enumerate(aweme_list, 1):
+            aweme_id = aw.get("aweme_id", "")
+            desc = aw.get("desc", "")[:40]
+            author = aw.get("author", {}).get("nickname", "unknown")
+            work = {
+                "platform": "douyin", "work_id": aweme_id,
+                "title": desc or "untitled", "author_name": author,
+            }
+            msg = f"  [{i}/{len(aweme_list)}] {author}: {desc}"
+            log.append(msg); self.log(msg)
+            video = aw.get("video", {})
+            play = video.get("play_addr", {}).get("url_list", [])
+            bit_rate = video.get("bit_rate", [])
+            if bit_rate:
+                best = max(bit_rate, key=lambda x: x.get("bit_rate", 0))
+                play = best.get("play_addr", {}).get("url_list", []) or play
+            if not play:
+                msg = "    无下载地址"; log.append(msg); self.log(msg); continue
+            target = storage.resolve(work)
+            dlc = create_async_client()
+            try:
+                dl = FileDownloader(client=dlc, save_dir=target.parent)
                 result = await dl.download_file(play[0], target.name)
                 if result:
                     msg = f"    ✓ {target.name}"
@@ -357,8 +357,8 @@ class DouyinOps(PlatformOps):
                     files.append(str(result))
                 else:
                     msg = "    ✗ 下载失败"; log.append(msg); self.log(msg)
-        finally:
-            await dlc.close()
+            finally:
+                await dlc.close()
         return FeatureResult(True, f"批量下载 {len(files)}/{len(aweme_list)} 个", log=log, files=files)
 
     async def _resolve_sec_uid(self, adapter, url: str) -> str:
