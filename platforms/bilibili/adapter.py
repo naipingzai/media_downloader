@@ -20,6 +20,7 @@ PLAYURL_URL = "https://api.bilibili.com/x/player/playurl"
 SERIES_URL = "https://api.bilibili.com/x/series/archives"
 SEASON_URL = "https://api.bilibili.com/x/polymer/web-space/seasons_archives_list"
 FAVORITE_URL = "https://api.bilibili.com/x/v3/fav/resource/list"
+PAGELIST_URL = "https://api.bilibili.com/x/player/pagelist"
 
 
 def _wbi_sign(params: dict, img_key: str, sub_key: str) -> dict:
@@ -366,6 +367,22 @@ class BilibiliAdapter(PlatformAdapter):
             return comments[:max_count]
         except Exception:
             return []
+
+    async def fetch_cid(self, bvid: str) -> int:
+        """获取视频第一个分P的cid。"""
+        try:
+            from curl_cffi.requests import AsyncSession
+            async with AsyncSession(impersonate=IMPERSONATE) as c:
+                h = {"User-Agent": USERAGENT, "Referer": "https://www.bilibili.com/"}
+                r = await c.get(f"{PAGELIST_URL}?bvid={bvid}", headers=h, proxy=self.proxy)
+                if r.status_code == 200:
+                    pages = self._sj(r)
+                    plist = pages.get("data") or []
+                    if plist and isinstance(plist, list):
+                        return plist[0].get("cid", 0)
+        except Exception:
+            pass
+        return 0
 
     async def fetch_user_info(self, mid: str) -> dict:
         """获取用户资料。"""

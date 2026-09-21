@@ -43,7 +43,10 @@ class FeatureWorker(QRunnable):
             # emit remaining log lines that weren't streamed
             for line in result.log:
                 self.signals.log_line.emit(line)
-            if result.data and len(result.data) > 0:
+            # 只有下载相关功能才更新作品资料卡
+            download_features = {"download", "account", "series", "collection",
+                                 "mix", "live", "tk_download", "ks_download", "xhs_download"}
+            if result.data and len(result.data) > 0 and self.feature_id in download_features:
                 self.signals.work_info.emit(result.data[0])
             self.signals.finished.emit({
                 "success": result.success,

@@ -189,11 +189,20 @@ class BilibiliOps(PlatformOps):
             if not work:
                 return FeatureResult(False, "解析视频信息失败")
             bvid = work.get("work_id", "")
-            cid = raw.get("view", {}).get("cid", 0)
-            log = [f"视频: {work['title'][:40]}"]
+            cid = 0
+            try:
+                cid = raw.get("view", {}).get("cid", 0) if isinstance(raw, dict) else 0
+            except Exception:
+                pass
+            # cid 为0时尝试从 pagelist 获取
+            if not cid and bvid:
+                cid = await adapter.fetch_cid(bvid)
+            log = [f"视频: {work['title'][:40]}", f"BV: {bvid}, cid: {cid}"]
+            if not cid:
+                return FeatureResult(False, "无法获取视频cid", log=log)
             comments = await adapter.fetch_comments(bvid, cid)
             if not comments:
-                return FeatureResult(True, "无评论或获取失败", log=log)
+                return FeatureResult(True, "无评论或获取失败（可能需要Cookie）", log=log)
             log.append(f"共 {len(comments)} 条评论")
             data = []
             for c in comments:
