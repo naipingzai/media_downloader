@@ -173,7 +173,7 @@ class BilibiliAdapter(PlatformAdapter):
                     return []
                 play_params = {
                     "bvid": bvid, "cid": cid,
-                    "qn": "80", "fnval": "16", "fourk": "1",
+                    "qn": "120", "fnval": "4048", "fourk": "1",
                 }
                 if self._img_key and self._sub_key:
                     play_params = _wbi_sign(play_params, self._img_key, self._sub_key)
