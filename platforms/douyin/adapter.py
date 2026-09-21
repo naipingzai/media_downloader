@@ -4,7 +4,6 @@ from shared.core import (
     PARAMS_HEADERS, USERAGENT, IMPERSONATE, VOLUME,
 )
 from shared.core.format import cookie_str_to_dict
-from shared.translation import _
 from .. import register_platform
 
 
