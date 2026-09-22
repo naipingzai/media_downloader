@@ -2,6 +2,7 @@
 import httpx
 import qrcode
 from PIL import Image
+from shared.core.login import PlatformLoginManager, LoginBus
 
 API_BASE = "https://edith.xiaohongshu.com"
 QR_CREATE = "/api/sns/web/v1/login/qrcode/create"
@@ -9,7 +10,9 @@ QR_POLL = "/api/sns/web/v1/login/qrcode/status"
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36"
 
 
-class XiaohongshuLoginManager:
+class XiaohongshuLoginManager(PlatformLoginManager):
+    platform_id = "xiaohongshu"
+
     def __init__(self):
         self._client = httpx.Client(
             base_url=API_BASE,

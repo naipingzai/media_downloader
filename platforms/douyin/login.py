@@ -3,6 +3,7 @@ import httpx
 import qrcode
 from io import BytesIO
 from PIL import Image
+from shared.core.login import PlatformLoginManager, LoginBus
 
 SSO_BASE = "https://sso.douyin.com"
 QR_CONNECT = "/get_qrcode/"
@@ -10,7 +11,9 @@ QR_POLL = "/check_qrconnect/"
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36"
 
 
-class DouyinLoginManager:
+class DouyinLoginManager(PlatformLoginManager):
+    platform_id = "douyin"
+
     def __init__(self):
         self._client = httpx.Client(
             base_url=SSO_BASE,

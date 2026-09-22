@@ -1,4 +1,4 @@
-"""登录对话框 — QR码登录 + Cookie输入（全平台支持）。"""
+"""登录对话框 — QR码登录（由各平台通过 LoginBus 注册）+ Cookie输入。"""
 from io import BytesIO
 
 from PySide6.QtCore import Qt, QTimer
@@ -9,20 +9,7 @@ from PySide6.QtWidgets import (
 )
 from shared.core.i18n import t, platform_name
 from shared.core.cookies import CookieManager
-
-# 平台 → login 模块路径
-LOGIN_MODULES = {
-    "douyin": "platforms.douyin.login",
-    "kuaishou": "platforms.kuaishou.login",
-    "xiaohongshu": "platforms.xiaohongshu.login",
-    "bilibili": "platforms.bilibili.login",
-}
-LOGIN_MANAGERS = {
-    "douyin": "DouyinLoginManager",
-    "kuaishou": "KuaishouLoginManager",
-    "xiaohongshu": "XiaohongshuLoginManager",
-    "bilibili": "BilibiliLoginManager",
-}
+from shared.core.login import LoginBus
 
 
 class LoginDialog(QDialog):
@@ -33,6 +20,7 @@ class LoginDialog(QDialog):
         self._qr_key = ""
         self._poll_timer = QTimer(self)
         self._poll_timer.timeout.connect(self._poll_qr)
+        self._manager = None
         self.setWindowTitle(f"{platform.title()} 登录")
         self.setMinimumWidth(520)
         self.setMinimumHeight(420)
@@ -53,67 +41,86 @@ class LoginDialog(QDialog):
         self._status.setStyleSheet(f"color: {color}; font-weight: bold;")
         layout.addWidget(self._status)
 
-        tabs = QTabWidget()
+        has_qr = LoginBus.has_qr(self._platform)
 
-        # Tab 1: QR code (all platforms)
-        qr_tab = QWidget()
-        qr_layout = QVBoxLayout(qr_tab)
-        qr_layout.addWidget(QLabel(t("qr_scan_hint", platform=platform_name(self._platform))))
-        self._qr_label = QLabel(t("click_to_generate"))
-        self._qr_label.setAlignment(Qt.AlignCenter)
-        self._qr_label.setMinimumHeight(200)
-        self._qr_label.setStyleSheet("background: white; border-radius: 8px; padding: 10px;")
-        qr_layout.addWidget(self._qr_label)
-        qr_btns = QHBoxLayout()
-        self._qr_gen_btn = QPushButton(t("generate_qr"))
-        self._qr_gen_btn.clicked.connect(self._generate_qr)
-        qr_btns.addWidget(self._qr_gen_btn)
-        self._qr_refresh_btn = QPushButton(t("refresh"))
-        self._qr_refresh_btn.clicked.connect(self._generate_qr)
-        self._qr_refresh_btn.setEnabled(False)
-        qr_btns.addWidget(self._qr_refresh_btn)
-        qr_layout.addLayout(qr_btns)
-        self._qr_status = QLabel("")
-        qr_layout.addWidget(self._qr_status)
-        tabs.addTab(qr_tab, "QR码登录")
+        if has_qr:
+            tabs = QTabWidget()
 
-        # Tab 2: Cookie input (all platforms)
-        cookie_tab = QWidget()
-        cookie_layout = QVBoxLayout(cookie_tab)
-        if hint:
-            cookie_layout.addWidget(QLabel(hint))
-        cookie_layout.addWidget(QLabel("从浏览器 DevTools > Application > Cookies 复制, 或直接粘贴 Cookie 字符串"))
+            # Tab 1: QR码登录
+            qr_tab = QWidget()
+            qr_layout = QVBoxLayout(qr_tab)
+            qr_layout.addWidget(QLabel(t("qr_scan_hint", platform=platform_name(self._platform))))
+            self._qr_label = QLabel(t("click_to_generate"))
+            self._qr_label.setAlignment(Qt.AlignCenter)
+            self._qr_label.setMinimumHeight(200)
+            self._qr_label.setStyleSheet("background: white; border-radius: 8px; padding: 10px;")
+            qr_layout.addWidget(self._qr_label)
+            qr_btns = QHBoxLayout()
+            self._qr_gen_btn = QPushButton(t("generate_qr"))
+            self._qr_gen_btn.clicked.connect(self._generate_qr)
+            qr_btns.addWidget(self._qr_gen_btn)
+            self._qr_refresh_btn = QPushButton(t("refresh"))
+            self._qr_refresh_btn.clicked.connect(self._generate_qr)
+            self._qr_refresh_btn.setEnabled(False)
+            qr_btns.addWidget(self._qr_refresh_btn)
+            qr_layout.addLayout(qr_btns)
+            self._qr_status = QLabel("")
+            qr_layout.addWidget(self._qr_status)
+            tabs.addTab(qr_tab, "QR码登录")
 
-        self._cookie_input = QTextEdit()
-        self._cookie_input.setPlaceholderText("粘贴 Cookie 字符串...")
-        self._cookie_input.setMaximumHeight(100)
-        cookie_layout.addWidget(self._cookie_input)
-        cookie_btns = QHBoxLayout()
-        save_btn = QPushButton(t("save_cookie"))
-        save_btn.clicked.connect(self._save_cookie)
-        cookie_btns.addWidget(save_btn)
-        clear_btn = QPushButton(t("clear"))
-        clear_btn.clicked.connect(self._clear_cookie)
-        cookie_btns.addWidget(clear_btn)
-        cookie_layout.addLayout(cookie_btns)
-        tabs.addTab(cookie_tab, "Cookie 输入")
+            # Tab 2: Cookie输入
+            cookie_tab = QWidget()
+            cookie_layout = QVBoxLayout(cookie_tab)
+            if hint:
+                cookie_layout.addWidget(QLabel(hint))
+            cookie_layout.addWidget(QLabel("从浏览器 DevTools > Application > Cookies 复制, 或直接粘贴 Cookie 字符串"))
+            self._cookie_input = QTextEdit()
+            self._cookie_input.setPlaceholderText("粘贴 Cookie 字符串...")
+            self._cookie_input.setMaximumHeight(100)
+            cookie_layout.addWidget(self._cookie_input)
+            cookie_btns = QHBoxLayout()
+            save_btn = QPushButton(t("save_cookie"))
+            save_btn.clicked.connect(self._save_cookie)
+            cookie_btns.addWidget(save_btn)
+            clear_btn = QPushButton(t("clear"))
+            clear_btn.clicked.connect(self._clear_cookie)
+            cookie_btns.addWidget(clear_btn)
+            cookie_layout.addLayout(cookie_btns)
+            tabs.addTab(cookie_tab, "Cookie 输入")
 
-        layout.addWidget(tabs)
-
-    def _get_manager(self):
-        mod_path = LOGIN_MODULES.get(self._platform)
-        mgr_name = LOGIN_MANAGERS.get(self._platform)
-        if not mod_path or not mgr_name:
-            raise RuntimeError(f"{self._platform} 不支持QR登录")
-        import importlib
-        mod = importlib.import_module(mod_path)
-        return getattr(mod, mgr_name)()
+            layout.addWidget(tabs)
+        else:
+            # 仅Cookie输入（无QR码支持的平台）
+            if hint:
+                layout.addWidget(QLabel(hint))
+            layout.addWidget(QLabel("从浏览器 DevTools > Application > Cookies 复制, 或直接粘贴 Cookie 字符串"))
+            self._cookie_input = QTextEdit()
+            self._cookie_input.setPlaceholderText("粘贴 Cookie 字符串...")
+            self._cookie_input.setMaximumHeight(100)
+            layout.addWidget(self._cookie_input)
+            cookie_btns = QHBoxLayout()
+            save_btn = QPushButton(t("save_cookie"))
+            save_btn.clicked.connect(self._save_cookie)
+            cookie_btns.addWidget(save_btn)
+            clear_btn = QPushButton(t("clear"))
+            clear_btn.clicked.connect(self._clear_cookie)
+            cookie_btns.addWidget(clear_btn)
+            layout.addLayout(cookie_btns)
+            self._qr_label = None
+            self._qr_status = None
+            self._qr_gen_btn = None
+            self._qr_refresh_btn = None
 
     def _generate_qr(self):
         try:
-            mgr = self._get_manager()
+            mgr = LoginBus.get_manager(self._platform)
+            if not mgr:
+                if self._qr_status:
+                    self._qr_status.setText(f"{self._platform} 不支持QR登录")
+                    self._qr_status.setStyleSheet("color: #ef4444;")
+                return
             url, key, img = mgr.generate_qr()
-            mgr.close()
+            self._manager = mgr
             self._qr_key = key
             buf = BytesIO()
             img.save(buf, format="PNG")
@@ -126,17 +133,20 @@ class LoginDialog(QDialog):
             self._qr_refresh_btn.setEnabled(True)
             self._poll_timer.start(3000)
         except Exception as e:
-            self._qr_status.setText(f"生成失败: {e}")
-            self._qr_status.setStyleSheet("color: #ef4444;")
+            if self._qr_status:
+                self._qr_status.setText(f"生成失败: {e}")
+                self._qr_status.setStyleSheet("color: #ef4444;")
 
     def _poll_qr(self):
         if not self._qr_key:
             self._poll_timer.stop()
             return
         try:
-            mgr = self._get_manager()
+            mgr = self._manager or LoginBus.get_manager(self._platform)
+            if not mgr:
+                self._poll_timer.stop()
+                return
             result = mgr.check_qr_status(self._qr_key)
-            mgr.close()
             status_code = result.get("code", -1)
             if status_code == 0:  # 登录成功
                 self._poll_timer.stop()
@@ -157,10 +167,12 @@ class LoginDialog(QDialog):
                 self._poll_timer.stop()
                 self._qr_status.setText(t("qr_expired"))
                 self._qr_status.setStyleSheet("color: #ef4444;")
-                self._qr_gen_btn.setEnabled(True)
+                if self._qr_gen_btn:
+                    self._qr_gen_btn.setEnabled(True)
         except Exception as e:
             self._poll_timer.stop()
-            self._qr_status.setText(f"轮询失败: {e}")
+            if self._qr_status:
+                self._qr_status.setText(f"轮询失败: {e}")
 
     def _save_cookie(self):
         text = self._cookie_input.toPlainText().strip()
@@ -180,4 +192,6 @@ class LoginDialog(QDialog):
 
     def closeEvent(self, event):
         self._poll_timer.stop()
+        if self._manager:
+            self._manager.close()
         super().closeEvent(event)

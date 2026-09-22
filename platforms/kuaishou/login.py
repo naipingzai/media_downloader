@@ -3,6 +3,7 @@ import httpx
 import qrcode
 from io import BytesIO
 from PIL import Image
+from shared.core.login import PlatformLoginManager, LoginBus
 
 API_BASE = "https://account.kuaishou.com"
 QR_TOKEN = "/rest/cc/pc/login/token"
@@ -11,7 +12,9 @@ QR_PAGE = "https://cp.kuaishou.com/article/profile"
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36"
 
 
-class KuaishouLoginManager:
+class KuaishouLoginManager(PlatformLoginManager):
+    platform_id = "kuaishou"
+
     def __init__(self):
         self._client = httpx.Client(
             base_url=API_BASE,

@@ -3,6 +3,7 @@ import httpx
 import qrcode
 from io import BytesIO
 from PIL import Image
+from shared.core.login import PlatformLoginManager, LoginBus
 
 PASSPORT_URL = "https://passport.bilibili.com"
 QR_GENERATE = "/x/passport-login/web/qrcode/generate"
@@ -11,7 +12,10 @@ NAV = "https://api.bilibili.com/x/web-interface/nav"
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36"
 
 
-class BilibiliLoginManager:
+class BilibiliLoginManager(PlatformLoginManager):
+    platform_id = "bilibili"
+    login_methods = ["qr"]
+
     def __init__(self):
         self._client = httpx.Client(
             base_url=PASSPORT_URL,

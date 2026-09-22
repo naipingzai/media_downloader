@@ -8,6 +8,27 @@ def load_all_platforms():
             import_module(f"platforms.{name}")
         except ImportError:
             pass
+    # 注册登录管理器到 LoginBus
+    _register_login_managers()
+
+
+def _register_login_managers():
+    """动态注册各平台的登录管理器。"""
+    from shared.core.login import LoginBus
+    _map = {
+        "douyin": ("platforms.douyin.login", "DouyinLoginManager"),
+        "kuaishou": ("platforms.kuaishou.login", "KuaishouLoginManager"),
+        "xiaohongshu": ("platforms.xiaohongshu.login", "XiaohongshuLoginManager"),
+        "bilibili": ("platforms.bilibili.login", "BilibiliLoginManager"),
+    }
+    for pid, (mod_path, cls_name) in _map.items():
+        try:
+            mod = import_module(mod_path)
+            cls = getattr(mod, cls_name, None)
+            if cls:
+                LoginBus.register(cls())
+        except Exception:
+            pass
 
 
 # 向后兼容
