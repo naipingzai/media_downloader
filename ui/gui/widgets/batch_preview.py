@@ -81,7 +81,7 @@ class BatchPreviewDialog(QDialog):
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._table.setShowGrid(False)
-        self._table.setAlternatingRowColors(True)
+        self._table.setAlternatingRowColors(False)
         hdr = self._table.horizontalHeader()
         hdr.setSectionResizeMode(self.COL_CHECK, QHeaderView.Fixed)
         hdr.setSectionResizeMode(self.COL_COVER, QHeaderView.Fixed)
@@ -159,6 +159,8 @@ class BatchPreviewDialog(QDialog):
         referer = _cover_referer(url)
         if referer:
             req.setRawHeader(b"Referer", referer.encode())
+        req.setRawHeader(b"User-Agent", b"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+        req.setTransferTimeout(8000)
         reply = self._net.get(req)
         reply.finished.connect(lambda r=reply, rw=row: self._on_cover(r, rw))
 

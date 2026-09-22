@@ -149,31 +149,46 @@ class DouyinOps(PlatformOps):
     async def _do_collection(self, url, cookie, save_dir, selected=None) -> FeatureResult:
         adapter = await self._get_adapter(cookie)
         storage = ConfigManager.get_storage_ops("douyin")
+        log = []
         try:
+            if not cookie:
+                return FeatureResult(False, "获取收藏失败：收藏功能需要登录，请先配置抖音 Cookie")
             aweme_list = self._cache_get("dy_collection:me")
             if aweme_list is None:
                 aweme_list = []
                 cursor = "0"
-                for _ in range(50):
+                page = 0
+                while page < 50:
                     data = await adapter.fetch_collection(cursor=cursor, count=20)
                     if not data:
+                        log.append(f"  API 返回空 (page={page})")
+                        break
+                    # 检查错误码
+                    status_code = data.get("status_code")
+                    if status_code and status_code != 0:
+                        log.append(f"  API 错误码: {status_code}, msg: {data.get('status_msg', '')}")
                         break
                     awemes = data.get("aweme_list") or []
                     if not awemes:
                         break
                     aweme_list.extend(awemes)
+                    log.append(f"  第{page+1}页: {len(awemes)}个作品 (累计{len(aweme_list)})")
                     if not data.get("has_more"):
                         break
                     cursor = str(data.get("cursor") or "0")
                     if cursor == "0":
                         break
+                    page += 1
                 if not aweme_list:
-                    if not cookie:
-                        return FeatureResult(False, "获取收藏失败：收藏功能需要登录，请先配置抖音 Cookie")
-                    return FeatureResult(False, "获取收藏失败或收藏为空（Cookie 可能已失效）")
+                    msg = "获取收藏失败或收藏为空"
+                    if log:
+                        msg += f"（{'；'.join(log[-3:])}）"
+                    msg += "。请确认：1) Cookie 有效且包含登录态 2) 抖音账号有收藏作品"
+                    return FeatureResult(False, msg, log=log)
                 self._cache_put("dy_collection:me", aweme_list)
+            log.append(f"共 {len(aweme_list)} 个收藏作品")
             return await self._batch_download(adapter, aweme_list, storage,
-                                              selected=selected)
+                                              selected=selected, log=log)
         finally:
             await adapter.close()
 
@@ -556,7 +571,7 @@ class DouyinOps(PlatformOps):
             await adapter.close()
 
     async def _batch_download(self, adapter, aweme_list, storage,
-                              selected=None, preview_items=None):
+                              selected=None, preview_items=None, log=None):
         """批量下载入口。selected=None → 第一阶段只返回预览；否则下载勾选项。"""
         if selected is None:
             items = preview_items if preview_items is not None else [
@@ -573,7 +588,9 @@ class DouyinOps(PlatformOps):
             return FeatureResult(False, "未匹配到勾选的作品（列表可能已过期，请重新执行）")
         from shared.flow.download import FileDownloader
         from shared.core.session import create_async_client
-        log, files = [], []
+        if log is None:
+            log = []
+        files = []
         for i, aw in enumerate(targets, 1):
             aweme_id = aw.get("aweme_id", "")
             desc = aw.get("desc", "")[:40]

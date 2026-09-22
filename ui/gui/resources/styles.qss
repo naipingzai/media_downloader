@@ -49,3 +49,37 @@ QComboBox QAbstractItemView::item {
     min-height: 24px;
 }
 QStatusBar { background: #1e293b; color: #94a3b8; }
+QDialog { background: #0f172a; color: #e2e8f0; }
+QTableWidget {
+    background: #1e293b;
+    color: #e2e8f0;
+    border: 1px solid #334155;
+    border-radius: 4px;
+    gridline-color: #334155;
+}
+QTableWidget::item {
+    padding: 4px;
+}
+QTableWidget::item:selected {
+    background: #334155;
+    color: #e2e8f0;
+}
+QHeaderView::section {
+    background: #1e293b;
+    color: #94a3b8;
+    border: none;
+    border-bottom: 1px solid #334155;
+    padding: 6px 4px;
+    font-weight: bold;
+}
+QCheckBox { color: #e2e8f0; }
+QCheckBox::indicator {
+    width: 16px; height: 16px;
+    border: 1px solid #475569;
+    border-radius: 3px;
+    background: #1e293b;
+}
+QCheckBox::indicator:checked {
+    background: #3b82f6;
+    border-color: #3b82f6;
+}
