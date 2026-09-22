@@ -1,11 +1,14 @@
 """解析结果卡片 — 左侧封面 + 右侧详情。"""
-from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QImage, QPixmap
-from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QPixmap
 from shared.core.i18n import t
 from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
 )
+from ..cover_loader import CoverLoader
+
+COVER_W = 176
+COVER_H = 110
 
 
 class VideoInfoWidget(QWidget):
@@ -13,7 +16,10 @@ class VideoInfoWidget(QWidget):
         super().__init__(parent)
         self.setObjectName("Panel")
         self.setAttribute(Qt.WA_StyledBackground, True)
-        self._net = QNetworkAccessManager(self)
+        self._cur_url = ""
+        loader = CoverLoader.instance()
+        loader.cover_ready.connect(self._on_cover_ready)
+
         outer = QVBoxLayout(self)
         outer.setContentsMargins(2, 2, 2, 2)
         outer.setSpacing(0)
@@ -37,13 +43,19 @@ class VideoInfoWidget(QWidget):
         self._inner_layout.setContentsMargins(14, 4, 14, 12)
         self._inner_layout.setSpacing(12)
 
-        # 左侧：封面
+        # 左侧：封面区域（始终占位显示）
+        cover_wrap = QVBoxLayout()
+        cover_wrap.setSpacing(2)
         self._cover = QLabel()
-        self._cover.setFixedSize(160, 100)
+        self._cover.setFixedSize(COVER_W, COVER_H)
         self._cover.setAlignment(Qt.AlignCenter)
-        self._cover.setStyleSheet("background: #0f172a; border-radius: 4px;")
-        self._cover.setVisible(False)
-        self._inner_layout.addWidget(self._cover, 0, Qt.AlignTop)
+        self._cover.setText("封面")
+        self._cover.setStyleSheet(
+            "background: #0f172a; color: #475569; border: 1px solid #334155;"
+            " border-radius: 6px; font-size: 12px;")
+        cover_wrap.addWidget(self._cover)
+        cover_wrap.addStretch()
+        self._inner_layout.addLayout(cover_wrap, 0)
 
         # 右侧：信息文本
         right = QVBoxLayout()
@@ -66,57 +78,39 @@ class VideoInfoWidget(QWidget):
         scroll.setWidget(inner)
         outer.addWidget(scroll)
 
-    def _load_cover(self, url: str):
-        """异步加载封面图。"""
+    def _set_cover_url(self, url: str):
+        self._cur_url = url or ""
         if not url:
-            self._cover.setVisible(False)
+            self._cover.setPixmap(QPixmap())
+            self._cover.setText("无封面")
             return
-        self._cover.setVisible(True)
-        self._cover.setText("...")
-        req = QNetworkRequest(QUrl(url))
-        referer = ""
-        u = url.lower()
-        if "douyin" in u or "douyinpic" in u:
-            referer = "https://www.douyin.com/"
-        elif "bilibili" in u or "hdslb" in u:
-            referer = "https://www.bilibili.com/"
-        elif "kuaishou" in u or "ksurl" in u:
-            referer = "https://www.kuaishou.com/"
-        elif "xiaohongshu" in u or "xhscdn" in u:
-            referer = "https://www.xiaohongshu.com/"
-        if referer:
-            req.setRawHeader(b"Referer", referer.encode())
-        req.setRawHeader(b"User-Agent", b"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-        req.setTransferTimeout(8000)
-        reply = self._net.get(req)
-        reply.finished.connect(lambda r=reply: self._on_cover_reply(r))
+        # 尝试缓存
+        cached = CoverLoader.instance().request(url)
+        if cached is not None:
+            self._apply_cover(cached)
+        else:
+            self._cover.setPixmap(QPixmap())
+            self._cover.setText("加载中")
 
-    def _on_cover_reply(self, reply):
-        try:
-            if reply.error() == reply.NoError:
-                img = QImage.fromData(reply.readAll())
-                if not img.isNull():
-                    pix = QPixmap.fromImage(img).scaled(
-                        160, 100, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
-                    x = max(0, (pix.width() - 160) // 2)
-                    y = max(0, (pix.height() - 100) // 2)
-                    cropped = pix.copy(x, y, min(160, pix.width()), min(100, pix.height()))
-                    self._cover.setPixmap(cropped)
-                    self._cover.setStyleSheet("border-radius: 4px;")
-                    return
-            self._cover.setText("🎬")
-        except Exception:
-            self._cover.setText("🎬")
-        finally:
-            reply.deleteLater()
+    def _apply_cover(self, pix: QPixmap):
+        scaled = pix.scaled(COVER_W, COVER_H, Qt.KeepAspectRatioByExpanding,
+                            Qt.SmoothTransformation)
+        x = max(0, (scaled.width() - COVER_W) // 2)
+        y = max(0, (scaled.height() - COVER_H) // 2)
+        cropped = scaled.copy(x, y, COVER_W, COVER_H)
+        self._cover.setPixmap(cropped)
+        self._cover.setStyleSheet("border-radius: 6px;")
+
+    def _on_cover_ready(self, url: str, pixmap: QPixmap):
+        if url == self._cur_url:
+            self._apply_cover(pixmap)
 
     def show_work(self, work):
         self._state.setText("(" + t("parsed") + ")")
         self._state.setStyleSheet("color: #22c55e; font-weight: bold;")
         # 加载封面
-        cover_url = work.get("cover_url") or work.get("cover") or ""
+        cover_url = work.get("cover_url") or work.get("cover") or work.get("pic") or ""
         if not cover_url:
-            # 从 video 对象中尝试获取
             video = work.get("video") or {}
             for key in ("cover", "origin_cover", "dynamic_cover"):
                 c = video.get(key)
@@ -125,7 +119,7 @@ class VideoInfoWidget(QWidget):
                     if urls:
                         cover_url = urls[0]
                         break
-        self._load_cover(cover_url)
+        self._set_cover_url(cover_url)
         lines = []
         if work.get('title'):
             lines.append(f"<b>标题:</b> {work['title']}")
@@ -145,7 +139,7 @@ class VideoInfoWidget(QWidget):
             lines.append(f"<b>时长:</b> {work['duration']}秒")
         if work.get('video_url'):
             url = work['video_url']
-            lines.append(f"<b>视频:</b> {url[:80]}{'...' if len(url) > 80 else ''}")
+            lines.append(f"<b>视频:</b> {url[:70]}{'...' if len(url) > 70 else ''}")
         if work.get('image_urls'):
             lines.append(f"<b>图片:</b> {len(work['image_urls'])} 张")
         if work.get('has_stream'):
@@ -165,7 +159,9 @@ class VideoInfoWidget(QWidget):
         self._state.setStyleSheet("color: #64748b;")
         self._detail.setVisible(False)
         self._info.setVisible(True)
-        self._cover.setVisible(False)
+        self._cur_url = ""
+        self._cover.setPixmap(QPixmap())
+        self._cover.setText("封面")
 
     def show_error(self, msg):
         self._state.setText("(" + t("parse_failed") + ")")

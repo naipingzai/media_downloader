@@ -67,6 +67,16 @@ class DouyinAdapter(PlatformAdapter):
             best = max(bit_rate, key=lambda x: x.get("bit_rate", 0))
             play = best.get("play_addr", {}).get("url_list", []) or play
         author = aweme.get("author", {})
+        # 封面（取第一个可用）
+        cover = ""
+        for key in ("cover", "origin_cover", "dynamic_cover"):
+            c = video.get(key)
+            if isinstance(c, dict):
+                urls = c.get("url_list") or []
+                if urls:
+                    cover = urls[0]
+                    break
+        stat = aweme.get("statistics", {})
         return {
             "platform": "douyin", "work_id": aweme.get("aweme_id", ""),
             "title": aweme.get("desc", ""),
@@ -74,9 +84,12 @@ class DouyinAdapter(PlatformAdapter):
             "author_id": author.get("uid", ""),
             "sec_user_id": author.get("sec_uid", ""),
             "video_url": play[0] if play else "",
-            "share_url": f"https://www.douyin.com/video/{aweme.get("aweme_id", "")}",
-            "digg_count": aweme.get("statistics", {}).get("digg_count", 0),
-            "comment_count": aweme.get("statistics", {}).get("comment_count", 0),
+            "cover_url": cover,
+            "duration": int(video.get("duration") or 0) // 1000,
+            "share_url": f"https://www.douyin.com/video/{aweme.get('aweme_id', '')}",
+            "digg_count": stat.get("digg_count", 0),
+            "comment_count": stat.get("comment_count", 0),
+            "view_count": stat.get("play_count", 0),
         }
 
     def get_download_urls(self, work: dict) -> list[str]:

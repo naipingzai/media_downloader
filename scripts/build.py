@@ -87,6 +87,7 @@ def get_pyinstaller_cmd():
         "--hidden-import", "shared.flow.link",
         "--hidden-import", "shared.flow.download",
         "--hidden-import", "shared.core.login",
+        "--hidden-import", "ui.gui.cover_loader",
         str(ROOT / "main.py"),
     ]
     return cmd
