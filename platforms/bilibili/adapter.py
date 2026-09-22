@@ -139,12 +139,15 @@ class BilibiliAdapter(PlatformAdapter):
         }
 
     def get_download_urls(self, work: dict) -> list[str]:
+        """返回空列表，实际下载地址通过 fetch_playurl 获取。"""
         return []
 
     async def get_account_works(self, user_id: str, pages: int = 0) -> list[dict]:
-        return []
+        """委托给 fetch_user_videos。"""
+        return await self.fetch_user_videos(user_id, max_count=pages or 30)
 
     async def close(self):
+        """无需清理资源。"""
         pass
 
     # ── 扩展 API 方法 ──

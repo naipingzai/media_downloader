@@ -182,6 +182,14 @@ class DouyinAdapter(PlatformAdapter):
         """喜欢的作品列表（需登录 Cookie）。"""
         return await self._signed_get("https://www.douyin.com/aweme/v1/web/aweme/favorite/", {"cursor": cursor, "count": str(count), "sec_user_id": "", "mix_id": "", "uifid": self.uifid, "msToken": ""})
 
+    async def fetch_favorite_folder_list(self, cursor: str = "0", count: int = 20) -> dict | None:
+        """获取用户自建收藏夹列表（需登录 Cookie）。"""
+        return await self._signed_get("https://www.douyin.com/aweme/v1/web/aweme/favorite_folder/list/", {"cursor": cursor, "count": str(count), "uifid": self.uifid, "msToken": ""})
+
+    async def fetch_favorite_folder_awemes(self, folder_id: str, cursor: str = "0", count: int = 20) -> dict | None:
+        """获取指定收藏夹内的作品列表（需登录 Cookie）。"""
+        return await self._signed_get("https://www.douyin.com/aweme/v1/web/aweme/favorite_folder/aweme_list/", {"folder_id": folder_id, "cursor": cursor, "count": str(count), "uifid": self.uifid, "msToken": ""})
+
     # ---- hot ----
     async def fetch_hot_list(self) -> list[dict]:
         data = await self._signed_get("https://www.douyin.com/aweme/v1/web/hot/search/list/", {})

@@ -16,8 +16,9 @@ class DouyinOps(PlatformOps):
         FeatureMeta("download",   "下载单个作品",       True),
         FeatureMeta("account",    "批量下载账号作品",   True),
         FeatureMeta("mix",        "批量下载合集作品",   True),
-        FeatureMeta("collection", "批量下载收藏作品",   True),
-        FeatureMeta("collection_album", "批量下载收藏专辑", True),
+        FeatureMeta("collection", "批量下载收藏视频",   False),
+        FeatureMeta("collection_album", "批量下载收藏合集", False),
+        FeatureMeta("favorite_folder", "批量下载收藏夹",  True),
         FeatureMeta("live",       "获取直播拉流地址",   True),
         FeatureMeta("comment",    "采集作品评论数据",   True),
         FeatureMeta("user",       "采集账号详细数据",   True),
@@ -242,6 +243,89 @@ class DouyinOps(PlatformOps):
         finally:
             await adapter.close()
 
+    async def _do_favorite_folder(self, url, cookie, save_dir, selected=None) -> FeatureResult:
+        """批量下载收藏夹内容。url 填收藏夹链接或收藏夹 ID。"""
+        adapter = await self._get_adapter(cookie)
+        storage = ConfigManager.get_storage_ops("douyin")
+        try:
+            if not cookie:
+                return FeatureResult(False, "收藏夹功能需要登录，请先配置抖音 Cookie")
+            folder_id = self._extract_folder_id(url)
+            if not folder_id:
+                # 没指定收藏夹 → 列出所有收藏夹
+                folders, cursor = [], "0"
+                for _ in range(10):
+                    data = await adapter.fetch_favorite_folder_list(cursor=cursor, count=20)
+                    if not data:
+                        break
+                    flist = data.get("folder_list") or data.get("aweme_list") or []
+                    if not flist:
+                        break
+                    folders.extend(flist)
+                    if not data.get("has_more"):
+                        break
+                    cursor = str(data.get("cursor") or "0")
+                    if cursor == "0":
+                        break
+                if not folders:
+                    return FeatureResult(False, "未找到收藏夹（Cookie 可能已失效）")
+                log = ["收藏夹列表:"]
+                items = []
+                for f in folders:
+                    fid = str(f.get("folder_id") or f.get("id") or "")
+                    name = f.get("name") or f.get("folder_name") or ""
+                    count = f.get("aweme_count") or f.get("count") or 0
+                    log.append(f"  [{fid}] {name} ({count}个作品)")
+                    items.append({
+                        "platform": "douyin", "work_id": fid,
+                        "title": name, "author_name": "",
+                        "cover": "", "duration": 0, "digg_count": count,
+                        "extra": f"收藏夹",
+                    })
+                return FeatureResult(True, f"共 {len(folders)} 个收藏夹，输入收藏夹ID或链接下载",
+                                     log=log, data=items)
+            # 指定了收藏夹 → 拉作品列表
+            cache_key = f"dy_folder:{folder_id}"
+            aweme_list = self._cache_get(cache_key)
+            if aweme_list is None:
+                aweme_list = []
+                cursor = "0"
+                for _ in range(50):
+                    data = await adapter.fetch_favorite_folder_awemes(folder_id, cursor=cursor, count=20)
+                    if not data:
+                        break
+                    awemes = data.get("aweme_list") or []
+                    if not awemes:
+                        break
+                    aweme_list.extend(awemes)
+                    if not data.get("has_more"):
+                        break
+                    cursor = str(data.get("cursor") or "0")
+                    if cursor == "0":
+                        break
+                if not aweme_list:
+                    return FeatureResult(False, "收藏夹为空或获取失败")
+                self._cache_put(cache_key, aweme_list)
+            return await self._batch_download(adapter, aweme_list, storage,
+                                              selected=selected)
+        finally:
+            await adapter.close()
+
+    @staticmethod
+    def _extract_folder_id(url: str) -> str:
+        """从收藏夹链接/纯 ID 提取 folder_id。"""
+        url = (url or "").strip()
+        if not url:
+            return ""
+        if "folder_id=" in url:
+            return url.split("folder_id=")[-1].split("&")[0].split("?")[0]
+        s = url.rstrip("/").split("/")[-1].split("?")[0]
+        if s.isdigit():
+            return s
+        from re import search
+        m = search(r"folder/(\d+)", url)
+        return m.group(1) if m else ""
+
     async def _do_live(self, url, cookie, save_dir, stop_event=None) -> FeatureResult:
         adapter = await self._get_adapter(cookie)
         storage = ConfigManager.get_storage_ops("douyin")
@@ -328,8 +412,9 @@ class DouyinOps(PlatformOps):
 
             target = storage.resolve({"platform": "douyin", "work_id": room_id,
                                        "title": f"直播_{owner}_{title}"[:60], "author_name": owner})
-            output_path = str(target.with_suffix(".ts"))
-            log.append(f"  开始录制 → {target.name}")
+            # 先录制为 FLV，后续根据存储配置再转换格式
+            flv_path = str(target.with_suffix(".flv"))
+            log.append(f"  开始录制 → {target.stem}.flv")
             log.append(f"  FFmpeg: {exe}")
 
             import subprocess
@@ -338,8 +423,8 @@ class DouyinOps(PlatformOps):
                 "-headers", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)\r\nReferer: https://live.douyin.com/\r\n",
                 "-i", stream_url,
                 "-c", "copy",
-                "-f", "mpegts",
-                output_path,
+                "-f", "flv",
+                flv_path,
             ]
             log.append(f"  录制中... (点击「停止录制」结束)")
 
@@ -362,12 +447,27 @@ class DouyinOps(PlatformOps):
 
                 elapsed = int(time.time() - start)
                 from pathlib import Path as P
-                fsize = P(output_path).stat().st_size if P(output_path).exists() else 0
+                fsize = P(flv_path).stat().st_size if P(flv_path).exists() else 0
                 fsize_mb = fsize / (1024 * 1024)
                 log.append(f"  ✓ 录制完成: {elapsed}秒, {fsize_mb:.1f}MB")
-                log.append(f"  文件: {output_path}")
+                log.append(f"  FLV 文件: {flv_path}")
+
+                # 根据存储配置转换格式（默认转为 mp4）
+                from shared.core.ffmpeg import FFmpegManager
+                output_path = str(target.with_suffix(".mp4"))
+                convert_cmd = FFmpegManager.build_convert_command(flv_path, output_path, "mp4")
+                if convert_cmd:
+                    log.append(f"  转换格式 → {target.stem}.mp4 ...")
+                    ok, msg = FFmpegManager.run_command(convert_cmd, timeout=600)
+                    if ok:
+                        P(flv_path).unlink(missing_ok=True)
+                        log.append(f"  ✓ 格式转换完成: {target.stem}.mp4")
+                        return FeatureResult(True, f"直播录制完成: {owner} ({elapsed}秒, {fsize_mb:.1f}MB)",
+                            log=log, files=[output_path])
+                    else:
+                        log.append(f"  ⚠ 格式转换失败，保留 FLV 文件: {msg[:100]}")
                 return FeatureResult(True, f"直播录制完成: {owner} ({elapsed}秒, {fsize_mb:.1f}MB)",
-                    log=log, files=[output_path])
+                    log=log, files=[flv_path])
             except Exception as e:
                 log.append(f"  ✗ 录制异常: {e}")
                 return FeatureResult(False, f"录制失败: {e}", log=log)
