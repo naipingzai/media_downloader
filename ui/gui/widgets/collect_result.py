@@ -41,7 +41,7 @@ class OutputResultView(QWidget):
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._table.verticalHeader().setVisible(False)
         self._table.setWordWrap(True)
-        self._table.setAlternatingRowColors(True)
+        self._table.setAlternatingRowColors(False)
         self._table.setColumnCount(3)
         self._table.setRowCount(0)
         self._table.setHorizontalHeaderLabels([t("status_col"), t("source_col"), t("path_col")])
@@ -71,14 +71,15 @@ class OutputResultView(QWidget):
         path_item.setToolTip(path)
         self._table.setItem(row, 2, path_item)
 
-    def set_download_results(self, files, title=t("download_ok")):
+    def set_download_results(self, files, title=t("download_ok"), source=""):
         """批量设置下载结果。"""
         self._title.setText(title)
         self._table.setRowCount(0)
         self._table.setColumnCount(3)
         self._table.setHorizontalHeaderLabels([t("status_col"), t("source_col"), t("path_col")])
         for f in files:
-            self.append_download("✓ 完成", "", f)
+            fname = f.split("/")[-1].split("\\")[-1] if f else ""
+            self.append_download("✓ 完成", source or fname, f)
 
     def set_download_log(self, log_lines, title=t("download_ok")):
         """从下载日志中提取结果。"""

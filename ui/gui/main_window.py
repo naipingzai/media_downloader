@@ -401,7 +401,8 @@ class MainWindow(QMainWindow):
             # 下载结果 → 输出结果面板
             files = result.get("files", [])
             if files:
-                self._output_result.set_download_results(files, result.get("message", "下载结果"))
+                source = self._last_exec.get("feature_id", "") if hasattr(self, "_last_exec") else ""
+                self._output_result.set_download_results(files, result.get("message", "下载结果"), source=source)
             # 采集数据 → 输出结果面板
             data = result.get("data")
             if data and isinstance(data, list) and len(data) > 0:
