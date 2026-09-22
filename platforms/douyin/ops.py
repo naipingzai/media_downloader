@@ -134,18 +134,31 @@ class DouyinOps(PlatformOps):
             from urllib.parse import urlparse, parse_qs
             parsed = urlparse(url.strip())
             room_id = parsed.path.rstrip("/").split("/")[-1]
-            if not room_id.isdigit():
+            if room_id.isdigit() and len(room_id) <= 14:
+                pass  # web_rid 短号
+            elif room_id and any(c.isalpha() for c in room_id) and len(room_id) >= 15:
+                pass  # 混合长 ID（feed 接口的 id_str），直接作为 room_id_str
+            else:
                 # fallback: 取所有数字
                 from re import findall
                 nums = findall(r"\d{10,}", url)
                 room_id = nums[0] if nums else room_id
-            log = [f"正在获取直播间信息 (room_id={room_id})..."]
-            data = await adapter.fetch_live(room_id)
+            if not room_id:
+                return FeatureResult(False, "无法从链接提取房间号")
+            # 纯数字短号走 web_rid；混合长 ID（如 feed 接口的 id_str）走 room_id_str
+            is_web_rid = room_id.isdigit() and len(room_id) <= 14
+            log = [f"正在获取直播间信息 ({'web_rid' if is_web_rid else 'room_id_str'}={room_id})..."]
+            data = await adapter.fetch_live(
+                room_id if is_web_rid else "",
+                room_id_str="" if is_web_rid else room_id)
             if not data:
                 log.append("  ✗ 获取直播信息失败")
                 return FeatureResult(False, "获取直播信息失败", log=log)
             room_list = data.get("data", {}).get("data", [])
-            room = room_list[0] if room_list else {}
+            if not room_list:
+                log.append("  ✗ 房间不存在或查询结果为空")
+                return FeatureResult(False, "房间不存在", log=log)
+            room = room_list[0]
             title = room.get("title", "")
             owner = room.get("owner", {}).get("nickname", "")
             status = room.get("status", 0)
@@ -154,28 +167,30 @@ class DouyinOps(PlatformOps):
             log.append(f"  标题: {title}")
             log.append(f"  状态: {'直播中' if status == 2 else '未开播'}")
 
-            # 选择最佳流地址
+            # 选择最佳流地址（FLV 优先，录制更稳定）
             stream_url = ""
             stream_type = ""
-            hls_map = stream.get("hls_pull_url_map", {})
-            flv_map = stream.get("flv_pull_url_map", {})
-            for q in ["origin", "uhd", "hd", "sd"]:
-                if q in hls_map:
-                    stream_url = hls_map[q]
-                    stream_type = "HLS"
+            # 实际字段: flv_pull_url 本身就是 dict；hls_pull_url_map 为 dict
+            flv_map = stream.get("flv_pull_url_map") or stream.get("flv_pull_url") or {}
+            hls_map = stream.get("hls_pull_url_map") or {}
+            if isinstance(flv_map, str):
+                flv_map = {"origin": flv_map} if flv_map else {}
+            if isinstance(hls_map, str):
+                hls_map = {"origin": hls_map} if hls_map else {}
+            qualitys = ["origin", "uhd", "full_hd", "FULL_HD1", "hd", "HD1", "sd", "SD1"]
+            for q in qualitys:
+                if q in flv_map:
+                    stream_url, stream_type = flv_map[q], "FLV"
                     break
             if not stream_url:
-                for q in ["origin", "uhd", "hd", "sd"]:
-                    if q in flv_map:
-                        stream_url = flv_map[q]
-                        stream_type = "FLV"
+                for q in qualitys:
+                    if q in hls_map:
+                        stream_url, stream_type = hls_map[q], "HLS"
                         break
-            if not stream_url and hls_map:
-                stream_url = list(hls_map.values())[0]
-                stream_type = "HLS"
             if not stream_url and flv_map:
-                stream_url = list(flv_map.values())[0]
-                stream_type = "FLV"
+                stream_url, stream_type = next(iter(flv_map.values())), "FLV"
+            if not stream_url and hls_map:
+                stream_url, stream_type = next(iter(hls_map.values())), "HLS"
             if not stream_url:
                 log.append("  ✗ 未获取到直播流地址")
                 return FeatureResult(False, "未获取到直播流", log=log)
@@ -205,7 +220,7 @@ class DouyinOps(PlatformOps):
             import subprocess
             cmd = [
                 str(exe), "-y",
-                "-headers", f"User-Agent: Mozilla/5.0\\r\\nReferer: https://www.douyin.com/\\r\\n",
+                "-headers", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)\r\nReferer: https://live.douyin.com/\r\n",
                 "-i", stream_url,
                 "-c", "copy",
                 "-f", "mpegts",

@@ -107,8 +107,62 @@ class DouyinAdapter(PlatformAdapter):
         return await self._signed_get("https://www.douyin.com/aweme/v1/web/search/item/", {"keyword": keyword, "search_channel": "aweme_video_web", "search_source": "normal_search", "query_correct_type": "1", "is_filter_search": "0", "from_group_id": "", "offset": str(offset), "count": str(count), "search_id": ""})
 
     # ---- live ----
-    async def fetch_live(self, room_id: str) -> dict | None:
-        return await self._signed_get("https://live.douyin.com/webcast/room/web/enter/", {"aid": "6383", "app_name": "douyin_web", "live_id": "1", "web_rid": room_id})
+    async def fetch_live(self, room_id: str, room_id_str: str = "") -> dict | None:
+        """抖音直播进房接口。
+
+        room_id 为分享链接中的 web_rid（纯数字短号）；
+        room_id_str 为长房间 ID（如 feed 接口返回的 id_str）。
+
+        live.douyin.com 的 webcast API 必须携带 ttwid 会话 cookie，
+        否则网关直接返回空 body (HTTP 200, content-length: 0)。
+        因此先访问直播间页面建立会话，再合并用户 cookie 请求 API。
+        """
+        from curl_cffi.requests import AsyncSession
+        from platforms.douyin.encrypt import DouYinParams
+        api = "https://live.douyin.com/webcast/room/web/enter/"
+        q = {
+            "aid": "6383", "app_name": "douyin_web", "live_id": "1",
+            "device_platform": "web", "language": "zh-CN",
+            "browser_language": "zh-CN", "browser_platform": "Win32",
+            "browser_name": "Chrome", "browser_version": "146.0.0.0",
+            "web_rid": "" if room_id_str else room_id,
+            "room_id_str": room_id_str,
+            "enter_from": "", "page_from": "", "enter_source": "",
+            "is_need_double_stream": "false",
+            "cookie_enabled": "true", "screen_width": "1920",
+            "screen_height": "1080", "channel": "channel_pc_web",
+        }
+        signed = DouYinParams().sign_url(api, q, method="GET", user_agent=USERAGENT)
+        h = PARAMS_HEADERS.copy()
+        h["Referer"] = f"https://live.douyin.com/{room_id}"
+        h["Origin"] = "https://live.douyin.com"
+        h["Accept"] = "application/json, text/plain, */*"
+        async with AsyncSession(impersonate=IMPERSONATE) as c:
+            # 1) 预热会话 — 获取 ttwid / UIFID
+            warm_h = {"User-Agent": USERAGENT,
+                      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"}
+            if self.cookie:
+                warm_h["Cookie"] = self.cookie
+            await c.get(f"https://live.douyin.com/{room_id}",
+                        headers=warm_h, proxy=self.proxy)
+            # 2) 合并用户 cookie 与会话 cookie（同名后者覆盖）
+            jar = "; ".join(f"{k}={v}" for k, v in c.cookies.items())
+            merged: dict[str, str] = {}
+            for part in (self.cookie, jar):
+                for kv in part.split(";"):
+                    if "=" in kv:
+                        k, v = kv.split("=", 1)
+                        merged[k.strip()] = v.strip()
+            if merged:
+                h["Cookie"] = "; ".join(f"{k}={v}" for k, v in merged.items())
+            # 3) 请求进房接口
+            r = await c.get(f"{api}?{signed}", headers=h, proxy=self.proxy)
+            if r.status_code != 200 or not r.content:
+                return None
+            try:
+                return r.json()
+            except Exception:
+                return None
 
     # ---- collection / favorites ----
     async def fetch_collection(self, cursor: str = "0", count: int = 20) -> dict | None:
