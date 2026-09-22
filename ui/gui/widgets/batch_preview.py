@@ -102,19 +102,20 @@ class CardWidget(QFrame):
         self._update_check_style()
 
     def _update_check_style(self):
+        # 选中：灰色边框框 + 内部画对勾；未选中：灰色边框框 + 空
         if self._checked:
             self._check_btn.setText("✓")
             self._check_btn.setStyleSheet(
-                "QPushButton { background: transparent; color: #3b82f6; "
-                "border: 2px solid #3b82f6; border-radius: 4px; "
+                "QPushButton { background: transparent; color: #e2e8f0; "
+                "border: 2px solid #64748b; border-radius: 4px; "
                 "font-size: 14px; font-weight: bold; }"
-                "QPushButton:hover { border-color: #2563eb; color: #2563eb; }")
+                "QPushButton:hover { border-color: #94a3b8; }")
         else:
             self._check_btn.setText("")
             self._check_btn.setStyleSheet(
                 "QPushButton { background: transparent; color: transparent; "
-                "border: 2px solid #475569; border-radius: 4px; }"
-                "QPushButton:hover { border-color: #64748b; }")
+                "border: 2px solid #64748b; border-radius: 4px; }"
+                "QPushButton:hover { border-color: #94a3b8; }")
 
     @property
     def work_id(self):

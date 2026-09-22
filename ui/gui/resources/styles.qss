@@ -80,9 +80,9 @@ QCheckBox::indicator {
     background: transparent;
 }
 QCheckBox::indicator:checked {
-    border-color: #3b82f6;
+    border-color: #64748b;
     background: transparent;
-    image: url(none);
+    image: url("{{CHECK_ICON}}");
 }
 QCheckBox::indicator:unchecked {
     border-color: #64748b;
