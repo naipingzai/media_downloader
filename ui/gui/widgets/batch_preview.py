@@ -1,217 +1,108 @@
-"""批量下载预览 — 卡片式布局：封面 + 描述 + 勾选。"""
-from PySide6.QtCore import Qt, Signal
+"""批量下载预览 — 与作品资料卡一致的卡片式布局：左封面 + 右资料，点击卡片切换选中。"""
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
-    QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
+    QDialog, QFrame, QHBoxLayout, QLabel, QPushButton,
     QScrollArea, QVBoxLayout, QWidget,
 )
 from shared.core.i18n import t
 from ..cover_loader import CoverLoader
+from .work_card import WorkCardWidget
 
 __all__ = ["BatchPreviewDialog"]
 
-CARD_W = 172
-COVER_W = 160
-COVER_H = 96
-
-
-def _fmt_duration(sec) -> str:
-    try:
-        sec = int(sec or 0)
-    except (TypeError, ValueError):
-        return ""
-    if sec <= 0:
-        return ""
-    h, m, s = sec // 3600, (sec % 3600) // 60, sec % 60
-    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
-
-
-class CardWidget(QFrame):
-    """单个作品卡片：封面 + 标题/作者 + 勾选按钮。"""
-
-    def __init__(self, item: dict, parent=None):
-        super().__init__(parent)
-        self._work_id = str(item.get("work_id", ""))
-        self._cover_url = str(item.get("cover") or "")
-        self._checked = True
-        self.setObjectName("CardWidget")
-        self.setFixedWidth(CARD_W)
-        self.setStyleSheet(
-            "#CardWidget { background: #1e293b; border: 1px solid #334155;"
-            " border-radius: 8px; }")
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(6, 6, 6, 6)
-        layout.setSpacing(5)
-
-        # 封面区域（固定尺寸，占位）
-        self._cover = QLabel()
-        self._cover.setFixedSize(COVER_W, COVER_H)
-        self._cover.setAlignment(Qt.AlignCenter)
-        self._cover.setText("加载中")
-        self._cover.setStyleSheet(
-            "background: #0f172a; color: #475569; border-radius: 6px; font-size: 11px;")
-        layout.addWidget(self._cover)
-
-        # 标题
-        title = str(item.get("title") or "").replace("\n", " ").strip()
-        self._title = QLabel(title or "(无标题)")
-        self._title.setStyleSheet("color: #e2e8f0; font-size: 12px;")
-        self._title.setWordWrap(False)
-        self._title.setFixedWidth(COVER_W)
-        # 超长标题省略
-        fm = self._title.fontMetrics()
-        elided = fm.elidedText(title or "(无标题)", Qt.ElideRight, COVER_W)
-        self._title.setText(elided)
-        self._title.setToolTip(title)
-        layout.addWidget(self._title)
-
-        # 作者 + 时长 + 点赞
-        parts = []
-        author = str(item.get("author_name") or "").strip()
-        if author:
-            parts.append(author)
-        dur = _fmt_duration(item.get("duration"))
-        if dur:
-            parts.append(dur)
-        digg = item.get("digg_count")
-        if digg:
-            parts.append(f"👍{digg}")
-        extra = str(item.get("extra") or "").strip()
-        sub = " · ".join(parts)
-        if extra:
-            sub = f"[{extra}] {sub}" if sub else f"[{extra}]"
-        self._sub = QLabel(fm.elidedText(sub, Qt.ElideRight, COVER_W) if sub else " ")
-        self._sub.setStyleSheet("color: #94a3b8; font-size: 11px;")
-        self._sub.setToolTip(sub)
-        layout.addWidget(self._sub)
-
-        # 勾选按钮
-        row = QHBoxLayout()
-        row.setContentsMargins(0, 2, 0, 0)
-        self._check_btn = QPushButton()
-        self._check_btn.setFixedSize(24, 24)
-        self._check_btn.setCursor(Qt.PointingHandCursor)
-        self._check_btn.clicked.connect(self._toggle_check)
-        self._update_check_style()
-        row.addStretch()
-        row.addWidget(self._check_btn)
-        layout.addLayout(row)
-
-    def _toggle_check(self):
-        self._checked = not self._checked
-        self._update_check_style()
-
-    def _update_check_style(self):
-        if self._checked:
-            # 灰色边框 + 内部蓝色对勾（不填充）
-            self._check_btn.setText("✓")
-            self._check_btn.setStyleSheet(
-                "QPushButton { background: transparent; color: #3b82f6;"
-                " border: 2px solid #64748b; border-radius: 4px;"
-                " font-size: 15px; font-weight: bold; }")
-        else:
-            self._check_btn.setText("")
-            self._check_btn.setStyleSheet(
-                "QPushButton { background: transparent;"
-                " border: 2px solid #64748b; border-radius: 4px; }")
-
-    @property
-    def work_id(self):
-        return self._work_id
-
-    @property
-    def is_checked(self):
-        return self._checked
-
-    def set_checked(self, v: bool):
-        self._checked = v
-        self._update_check_style()
-
-    def set_cover_pixmap(self, pix: QPixmap):
-        # 按比例缩放显示完整封面（不裁剪）
-        scaled = pix.scaled(COVER_W, COVER_H, Qt.KeepAspectRatio,
-                            Qt.SmoothTransformation)
-        self._cover.setPixmap(scaled)
-        self._cover.setStyleSheet(
-            "background: #0f172a; border-radius: 6px;")
-        self._cover.setFixedSize(COVER_W, COVER_H)
-
 
 class BatchPreviewDialog(QDialog):
-    """卡片式批量下载预览：封面 + 描述 + 勾选按钮。"""
+    """卡片式批量下载预览：每个作品一张卡片（左封面 + 右资料，与作品资料卡一致）。
+
+    选中逻辑：
+    - 点击卡片任意位置即可切换选中/取消（复选框同步）
+    - 选中卡片显示高亮边框 + 右上角对勾角标
+    - 顶栏提供 全选 / 全不选 / 反选 三个快捷按钮
+    """
 
     def __init__(self, items, parent=None):
         super().__init__(parent)
         self.setWindowTitle(t("batch_preview_title"))
-        self.resize(860, 620)
+        self.resize(820, 680)
         self._items = [it for it in (items or []) if it.get("work_id")]
-        self._cards: dict[str, CardWidget] = {}
+        self._cards: dict[str, WorkCardWidget] = {}
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 10, 12, 10)
-        root.setSpacing(8)
+        root.setContentsMargins(14, 12, 14, 12)
+        root.setSpacing(10)
 
-        # 顶栏
+        # 顶栏：统计 + 快捷选择按钮
         top = QHBoxLayout()
+        top.setSpacing(8)
         self._count_label = QLabel()
-        self._count_label.setStyleSheet("color: #94a3b8;")
+        self._count_label.setStyleSheet("color: #94a3b8; font-size: 13px;")
         top.addWidget(self._count_label)
         top.addStretch()
         for text, fn in [(t("batch_select_all"), lambda: self._check_all(True)),
                          (t("batch_select_none"), lambda: self._check_all(False)),
                          (t("batch_select_invert"), self._invert)]:
             btn = QPushButton(text)
+            btn.setObjectName("SubtleButton")
+            btn.setCursor(Qt.PointingHandCursor)
             btn.setStyleSheet(
                 "QPushButton { background: #334155; color: #e2e8f0; border: none;"
-                " border-radius: 4px; padding: 6px 12px; }"
+                " border-radius: 5px; padding: 6px 14px; font-size: 12px; }"
                 "QPushButton:hover { background: #475569; }")
             btn.clicked.connect(fn)
             top.addWidget(btn)
         root.addLayout(top)
 
-        # 滚动 + 网格
+        # 提示语
+        hint = QLabel("💡 点击卡片任意位置即可选中/取消，右上角对勾表示已选中")
+        hint.setStyleSheet("color: #64748b; font-size: 12px;")
+        root.addWidget(hint)
+
+        # 滚动 + 卡片列表（与作品资料卡一致的卡片）
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         container = QWidget()
-        self._grid = QGridLayout(container)
-        self._grid.setSpacing(10)
-        self._grid.setContentsMargins(4, 4, 4, 4)
-
-        self._cols = max(1, (self.width() - 40) // (CARD_W + 12))
+        self._list = QVBoxLayout(container)
+        self._list.setSpacing(10)
+        self._list.setContentsMargins(4, 4, 4, 4)
 
         loader = CoverLoader.instance()
         loader.cover_ready.connect(self._on_cover_ready)
 
         cover_urls = []
-        for idx, it in enumerate(self._items):
-            card = CardWidget(it)
+        for it in self._items:
+            card = WorkCardWidget(it, checked=True)
+            card.checked_changed.connect(lambda _id, _v: self._refresh_count())
             self._cards[card.work_id] = card
-            row, col = divmod(idx, self._cols)
-            self._grid.addWidget(card, row, col)
-            cover = str(it.get("cover") or "")
-            if cover:
-                cover_urls.append((card, cover))
+            self._list.addWidget(card)
+            if card.cover_url:
+                cover_urls.append((card, card.cover_url))
+        self._list.addStretch()
 
         scroll.setWidget(container)
         root.addWidget(scroll, 1)
 
         # 底栏
         bottom = QHBoxLayout()
+        bottom.setSpacing(10)
         bottom.addStretch()
         cancel_btn = QPushButton(t("cancel"))
-        cancel_btn.clicked.connect(self.reject)
+        cancel_btn.setCursor(Qt.PointingHandCursor)
         cancel_btn.setStyleSheet(
             "QPushButton { background: #334155; color: #e2e8f0; border: none;"
-            " border-radius: 6px; padding: 8px 16px; }")
+            " border-radius: 6px; padding: 8px 18px; }"
+            "QPushButton:hover { background: #475569; }")
+        cancel_btn.clicked.connect(self.reject)
         self._dl_btn = QPushButton()
+        self._dl_btn.setCursor(Qt.PointingHandCursor)
         self._dl_btn.setStyleSheet(
             "QPushButton { background: #3b82f6; color: white; border: none;"
-            " border-radius: 6px; padding: 8px 16px; }"
-            "QPushButton:hover { background: #2563eb; }")
+            " border-radius: 6px; padding: 8px 18px; font-weight: bold; }"
+            "QPushButton:hover { background: #2563eb; }"
+            "QPushButton:disabled { background: #334155; color: #64748b; }")
         self._dl_btn.clicked.connect(self.accept)
         bottom.addWidget(cancel_btn)
         bottom.addWidget(self._dl_btn)

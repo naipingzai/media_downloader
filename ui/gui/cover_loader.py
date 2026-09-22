@@ -50,11 +50,18 @@ class _CoverTask(QRunnable):
             if r.status_code == 200 and r.content:
                 img = QImage.fromData(r.content)
                 if not img.isNull():
-                    self.signals.loaded.emit(self.url, QPixmap.fromImage(img))
+                    self._emit("loaded", self.url, QPixmap.fromImage(img))
                     return
-            self.signals.failed.emit(self.url)
+            self._emit("failed", self.url)
         except Exception:
-            self.signals.failed.emit(self.url)
+            self._emit("failed", self.url)
+
+    def _emit(self, kind: str, *args):
+        # 程序退出时信号源可能已销毁，安全忽略避免后台线程报错
+        try:
+            getattr(self.signals, kind).emit(*args)
+        except RuntimeError:
+            pass
 
 
 class CoverLoader(QObject):

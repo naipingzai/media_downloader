@@ -88,6 +88,11 @@ def get_pyinstaller_cmd():
         "--hidden-import", "shared.flow.download",
         "--hidden-import", "shared.core.login",
         "--hidden-import", "ui.gui.cover_loader",
+        "--hidden-import", "ui.gui.widgets",
+        "--hidden-import", "ui.gui.widgets.cover_label",
+        "--hidden-import", "ui.gui.widgets.work_card",
+        "--hidden-import", "ui.gui.widgets.video_info",
+        "--hidden-import", "ui.gui.widgets.batch_preview",
         str(ROOT / "main.py"),
     ]
     return cmd

@@ -140,7 +140,7 @@ class MainWindow(QMainWindow):
         self._result_view = ResultView(workspace)
 
         # 固定最小高度，防止布局跳动
-        self._video_info.setMinimumHeight(180)
+        self._video_info.setMinimumHeight(260)
         self._output_result.setMinimumHeight(180)
         self._feature_panel.setMinimumHeight(240)
         self._result_view.setMinimumHeight(240)
