@@ -197,8 +197,7 @@ class MainWindow(QMainWindow):
         self._hero_title.setText(label)
         self._hero_sub.setText(t("features_available", count=len(features)))
         self._video_info.show_empty()
-        self._result_view.clear()
-        self._output_result.show_empty()
+        # 不清除输出结果和日志，用户可通过各面板的清除按钮手动清除
 
     def _open_login(self):
         if not self._current_platform:

@@ -2,8 +2,8 @@
 from PySide6.QtCore import Qt
 from shared.core.i18n import t
 from PySide6.QtWidgets import (
-    QHeaderView, QLabel, QTableWidget, QTableWidgetItem,
-    QVBoxLayout, QWidget,
+    QHBoxLayout, QHeaderView, QLabel, QPushButton, QTableWidget, QTableWidgetItem,
+    QVBoxLayout, QWidget, QAbstractItemView,
 )
 
 
@@ -18,21 +18,41 @@ class OutputResultView(QWidget):
         self.setObjectName("Panel")
         self.setAttribute(Qt.WA_StyledBackground, True)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 12, 16, 12)
-        layout.setAlignment(Qt.AlignTop)
+        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setSpacing(0)
+
+        # 标题栏 + 清除按钮
+        hdr = QHBoxLayout()
+        hdr.setContentsMargins(14, 10, 14, 4)
+        hdr.setSpacing(6)
         self._title = QLabel(t("output_result"))
         self._title.setObjectName("SectionTitle")
         self._title.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        layout.addWidget(self._title)
+        hdr.addWidget(self._title)
+        hdr.addStretch()
+        clear_btn = QPushButton("清除")
+        clear_btn.setObjectName("SubtleButton")
+        clear_btn.clicked.connect(self.show_empty)
+        hdr.addWidget(clear_btn)
+        layout.addLayout(hdr)
+
         self._table = QTableWidget(self)
-        self._table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self._table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self._table.setSelectionBehavior(QTableWidget.SelectRows)
+        self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._table.verticalHeader().setVisible(False)
         self._table.setWordWrap(True)
+        self._table.setAlternatingRowColors(True)
         self._table.setColumnCount(3)
         self._table.setRowCount(0)
         self._table.setHorizontalHeaderLabels([t("status_col"), t("source_col"), t("path_col")])
+        # 列宽模式：状态列固定，来源列自适应，路径列拉伸
+        header = self._table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.Stretch)
+        # 允许水平滚动（防止内容被截断）
+        self._table.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
+        self._table.setSizeAdjustPolicy(QAbstractItemView.AdjustToContents)
         layout.addWidget(self._table)
 
     def show_empty(self):
@@ -47,7 +67,9 @@ class OutputResultView(QWidget):
         self._table.insertRow(row)
         self._table.setItem(row, 0, QTableWidgetItem(status))
         self._table.setItem(row, 1, QTableWidgetItem(source))
-        self._table.setItem(row, 2, QTableWidgetItem(path))
+        path_item = QTableWidgetItem(path)
+        path_item.setToolTip(path)
+        self._table.setItem(row, 2, path_item)
 
     def set_download_results(self, files, title=t("download_ok")):
         """批量设置下载结果。"""
@@ -78,7 +100,15 @@ class OutputResultView(QWidget):
         self._table.setRowCount(len(rows))
         for i, row in enumerate(rows):
             for j, val in enumerate(row):
-                self._table.setItem(i, j, QTableWidgetItem(str(val)))
+                item = QTableWidgetItem(str(val))
+                item.setToolTip(str(val))
+                self._table.setItem(i, j, item)
+        # 根据列数动态设置列宽模式
+        header = self._table.horizontalHeader()
+        for c in range(len(headers)):
+            header.setSectionResizeMode(c, QHeaderView.ResizeToContents)
+        if len(headers) > 0:
+            header.setSectionResizeMode(len(headers) - 1, QHeaderView.Stretch)
 
     def show_hot_list(self, data):
         self.show_data(t("hot_list"), [t("rank"), t("keyword"), t("hot_value")],
@@ -86,11 +116,11 @@ class OutputResultView(QWidget):
 
     def show_comments(self, data):
         self.show_data(t("comment_data"), [t("user"), t("content"), t("likes")],
-                       [[d["user"], d["text"][:50], d["digg_count"]] for d in data])
+                       [[d["user"], d["text"][:80], d["digg_count"]] for d in data])
 
     def show_search(self, data):
         self.show_data(t("search_result"), [t("title_field"), t("author"), t("likes")],
-                       [[d["title"][:40], d["author"], d["digg_count"]] for d in data])
+                       [[d["title"][:60], d["author"], d["digg_count"]] for d in data])
 
     def show_user(self, data):
         self.show_data(t("account_info"), [t("title_field"), t("yes")], [

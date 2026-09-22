@@ -1,6 +1,6 @@
 """执行日志输出。"""
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QLabel, QTextEdit, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QTextEdit, QVBoxLayout, QWidget
 
 
 class ResultView(QWidget):
@@ -9,12 +9,24 @@ class ResultView(QWidget):
         self.setObjectName("Panel")
         self.setAttribute(Qt.WA_StyledBackground, True)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 12, 16, 12)
-        layout.setAlignment(Qt.AlignTop)
+        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setSpacing(0)
+
+        # 标题栏 + 清除按钮
+        hdr = QHBoxLayout()
+        hdr.setContentsMargins(14, 10, 14, 4)
+        hdr.setSpacing(6)
         title = QLabel("执行日志")
         title.setObjectName("SectionTitle")
         title.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        layout.addWidget(title)
+        hdr.addWidget(title)
+        hdr.addStretch()
+        clear_btn = QPushButton("清除")
+        clear_btn.setObjectName("SubtleButton")
+        clear_btn.clicked.connect(self.clear)
+        hdr.addWidget(clear_btn)
+        layout.addLayout(hdr)
+
         self._log = QTextEdit()
         self._log.setReadOnly(True)
         self._log.setMinimumHeight(0)
@@ -28,7 +40,8 @@ class ResultView(QWidget):
         if color:
             self._log.append(f'<span style="color:{color}">{text}</span>')
         else:
-            self._log.append(text)
+            # 默认颜色为浅灰（正常日志）
+            self._log.append(f'<span style="color:#e2e8f0">{text}</span>')
 
     def clear(self):
         self._log.clear()
@@ -41,7 +54,15 @@ class ResultView(QWidget):
         else:
             self.append(f"✗ {msg}", "#ef4444")
         for line in result.get("log", []):
-            self.append(line)
+            # 根据内容自动判断颜色
+            if "✓" in line:
+                self.append(line, "#22c55e")
+            elif "✗" in line or "失败" in line:
+                self.append(line, "#ef4444")
+            elif "⚠" in line:
+                self.append(line, "#f59e0b")
+            else:
+                self.append(line)
         if result.get("files"):
             self.append(f"\n下载文件 ({len(result['files'])}个):", "#38bdf8")
             for f in result["files"]:
