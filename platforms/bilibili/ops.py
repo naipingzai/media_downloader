@@ -58,6 +58,7 @@ class BilibiliOps(PlatformOps):
                     urls = await adapter.fetch_playurl(bvid)
                 if not urls:
                     _log("  无下载地址"); continue
+                for _n in self._quality_note(adapter): _log(_n)
                 target = storage.resolve(work)
                 dlc = create_async_client()
                 try:
@@ -93,6 +94,7 @@ class BilibiliOps(PlatformOps):
                 urls = await adapter.fetch_playurl(bvid)
                 if not urls:
                     log.append("  无下载地址"); continue
+                for _n in self._quality_note(adapter): log.append(_n)
                 work = {"platform": "bilibili", "work_id": bvid, "title": title,
                         "author_name": v.get("owner", {}).get("name", "")}
                 target = storage.resolve(work)
@@ -161,6 +163,7 @@ class BilibiliOps(PlatformOps):
                 urls = await adapter.fetch_playurl(bvid)
                 if not urls:
                     log.append("  无下载地址"); continue
+                for _n in self._quality_note(adapter): log.append(_n)
                 work = {"platform": "bilibili", "work_id": bvid, "title": title,
                         "author_name": upper.get("name", "")}
                 target = storage.resolve(work)
@@ -283,6 +286,20 @@ class BilibiliOps(PlatformOps):
 
     # ── 工具方法 ──
 
+    @staticmethod
+    def _quality_note(adapter) -> list[str]:
+        """根据 fetch_playurl 实际拿到的清晰度生成提示日志。"""
+        notes = []
+        q = getattr(adapter, "last_quality", "")
+        if q:
+            notes.append(f"  清晰度: {q}")
+        if getattr(adapter, "last_low", False):
+            if getattr(adapter, "cookie", ""):
+                notes.append("  ⚠ 清晰度偏低，SESSDATA 可能已失效，请重新登录")
+            else:
+                notes.append("  ⚠ 未登录，B站限制最高480P；配置 SESSDATA Cookie 后可下载1080P/4K 原画")
+        return notes
+
     def _extract_mid(self, url: str) -> str:
         from re import compile
         m = compile(r"bilibili\.com/space/(\d+)").search(url)
@@ -312,6 +329,7 @@ class BilibiliOps(PlatformOps):
             urls = await adapter.fetch_playurl(bvid)
             if not urls:
                 log.append("  无下载地址"); continue
+            for _n in self._quality_note(adapter): log.append(_n)
             work = {"platform": "bilibili", "work_id": bvid, "title": title,
                     "author_name": v.get("owner", {}).get("name", "") or v.get("author", {}).get("name", "")}
             target = storage.resolve(work)

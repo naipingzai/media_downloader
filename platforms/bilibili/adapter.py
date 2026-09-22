@@ -45,6 +45,8 @@ class BilibiliAdapter(PlatformAdapter):
         self.proxy = self.config.proxy
         self._img_key = ""
         self._sub_key = ""
+        self.last_quality = ""   # 最近一次 fetch_playurl 实际拿到的清晰度描述
+        self.last_low = False    # 最近一次是否低于 1080P（未登录/SESSDATA失效会被限制）
 
     def get_config_schema(self) -> dict:
         return {"cookie": {"type": "str", "label": "SESSDATA"}, "proxy": {"type": "str", "label": "Proxy"}}
@@ -57,12 +59,30 @@ class BilibiliAdapter(PlatformAdapter):
         ]
         return [u for p in patterns for u in p.findall(url)]
 
+    def _headers(self) -> dict:
+        """构造统一请求头。
+
+        SESSDATA 容错：配置可能存的是纯值（xxx）、带前缀（SESSDATA=xxx）
+        或从浏览器复制的整串 Cookie（a=1; SESSDATA=xx; ...），均正确处理。
+        """
+        h = {"User-Agent": USERAGENT, "Referer": "https://www.bilibili.com/"}
+        raw = (self.cookie or "").strip()
+        if raw:
+            if "=" in raw:
+                from shared.core.format import cookie_str_to_dict
+                ck = cookie_str_to_dict(raw)
+                if ck:
+                    h["Cookie"] = "; ".join(f"{k}={v}" for k, v in ck.items())
+                else:
+                    h["Cookie"] = f"SESSDATA={raw}"
+            else:
+                h["Cookie"] = f"SESSDATA={raw}"
+        return h
+
     async def _ensure_wbi(self, client):
         if self._img_key and self._sub_key:
             return
-        h = {"User-Agent": USERAGENT, "Referer": "https://www.bilibili.com/"}
-        if self.cookie:
-            h["Cookie"] = f"SESSDATA={self.cookie}"
+        h = self._headers()
         try:
             r = await client.get(NAV_URL, headers=h)
             data = r.json().get("data", {})
@@ -89,9 +109,7 @@ class BilibiliAdapter(PlatformAdapter):
             params = {"bvid": bvid}
             if self._img_key and self._sub_key:
                 params = _wbi_sign(params, self._img_key, self._sub_key)
-            h = {"User-Agent": USERAGENT, "Referer": "https://www.bilibili.com/"}
-            if self.cookie:
-                h["Cookie"] = f"SESSDATA={self.cookie}"
+            h = self._headers()
             r = await c.get(VIEW_URL, params=params, headers=h, proxy=self.proxy)
             if r.status_code == 200:
                 data = r.json()
@@ -160,9 +178,7 @@ class BilibiliAdapter(PlatformAdapter):
                 params = {"bvid": bvid}
                 if self._img_key and self._sub_key:
                     params = _wbi_sign(params, self._img_key, self._sub_key)
-                h = {"User-Agent": USERAGENT, "Referer": "https://www.bilibili.com/"}
-                if self.cookie:
-                    h["Cookie"] = f"SESSDATA={self.cookie}"
+                h = self._headers()
                 r = await c.get(VIEW_URL, params=params, headers=h, proxy=self.proxy)
                 if r.status_code != 200:
                     return []
@@ -182,19 +198,34 @@ class BilibiliAdapter(PlatformAdapter):
                 if r2.status_code != 200:
                     return []
                 pdata = self._jget(self._sj(r2), "data") or {}
+                fmts = {f.get("quality"): (f.get("new_description") or f.get("description") or "")
+                        for f in (pdata.get("support_formats") or [])}
                 dash = pdata.get("dash")
                 if dash:
                     video_list = dash.get("video") or []
                     audio_list = dash.get("audio") or []
                     if video_list:
-                        best_video = max(video_list, key=lambda x: x.get("bandwidth", 0))
+                        # 按清晰度 id 分组取最高档（id 即 qn：16=360P 32=480P 64=720P
+                        # 80=1080P 112=1080P+ 116=1080P60 120=4K 125=HDR 126=杜比）
+                        best_id = max(v.get("id") or 0 for v in video_list)
+                        top = [v for v in video_list if (v.get("id") or 0) == best_id]
+                        def _rank(v):
+                            c = (v.get("codecs") or "").lower()
+                            cr = 0 if c.startswith("avc1") else (1 if c.startswith(("hev", "hvc")) else 2)
+                            return (cr, -(v.get("bandwidth") or 0))
+                        best_video = min(top, key=_rank)
+                        self.last_quality = fmts.get(best_id) or f"qn={best_id}"
+                        self.last_low = best_id < 80
                         urls = [best_video.get("baseUrl") or best_video.get("base_url") or ""]
                         if audio_list:
-                            best_audio = max(audio_list, key=lambda x: x.get("bandwidth", 0))
+                            best_audio = max(audio_list, key=lambda x: ((x.get("id") or 0), (x.get("bandwidth") or 0)))
                             urls.append(best_audio.get("baseUrl") or best_audio.get("base_url") or "")
                         return [u for u in urls if u]
                 durl = pdata.get("durl")
                 if durl:
+                    qn = pdata.get("quality") or 0
+                    self.last_quality = fmts.get(qn) or (f"qn={qn}" if qn else "")
+                    self.last_low = 0 < int(qn) < 80
                     return [d.get("url", "") for d in durl if d.get("url")]
                 return []
         except Exception:
@@ -206,9 +237,7 @@ class BilibiliAdapter(PlatformAdapter):
             from curl_cffi.requests import AsyncSession
             async with AsyncSession(impersonate=IMPERSONATE) as c:
                 await self._ensure_wbi(c)
-                h = {"User-Agent": USERAGENT, "Referer": "https://www.bilibili.com/"}
-                if self.cookie:
-                    h["Cookie"] = f"SESSDATA={self.cookie}"
+                h = self._headers()
                 videos = []
                 pn = 1
                 while len(videos) < max_count:
@@ -238,9 +267,7 @@ class BilibiliAdapter(PlatformAdapter):
             from curl_cffi.requests import AsyncSession
             async with AsyncSession(impersonate=IMPERSONATE) as c:
                 await self._ensure_wbi(c)
-                h = {"User-Agent": USERAGENT, "Referer": "https://www.bilibili.com/"}
-                if self.cookie:
-                    h["Cookie"] = f"SESSDATA={self.cookie}"
+                h = self._headers()
                 params = {"mid": mid, "ps": "20", "pn": "1"}
                 if self._img_key and self._sub_key:
                     params = _wbi_sign(params, self._img_key, self._sub_key)
@@ -270,9 +297,7 @@ class BilibiliAdapter(PlatformAdapter):
             from curl_cffi.requests import AsyncSession
             async with AsyncSession(impersonate=IMPERSONATE) as c:
                 await self._ensure_wbi(c)
-                h = {"User-Agent": USERAGENT, "Referer": "https://www.bilibili.com/"}
-                if self.cookie:
-                    h["Cookie"] = f"SESSDATA={self.cookie}"
+                h = self._headers()
                 params = {"mid": mid, "series_id": str(sid), "ps": "30", "pn": "1"}
                 if self._img_key and self._sub_key:
                     params = _wbi_sign(params, self._img_key, self._sub_key)
@@ -289,9 +314,7 @@ class BilibiliAdapter(PlatformAdapter):
             from curl_cffi.requests import AsyncSession
             async with AsyncSession(impersonate=IMPERSONATE) as c:
                 await self._ensure_wbi(c)
-                h = {"User-Agent": USERAGENT, "Referer": "https://www.bilibili.com/"}
-                if self.cookie:
-                    h["Cookie"] = f"SESSDATA={self.cookie}"
+                h = self._headers()
                 if fid == "0":
                     fav_params = {"up_mid": ""}
                     if self._img_key and self._sub_key:
@@ -329,9 +352,7 @@ class BilibiliAdapter(PlatformAdapter):
             from curl_cffi.requests import AsyncSession
             aid = 0
             async with AsyncSession(impersonate=IMPERSONATE) as c:
-                h = {"User-Agent": USERAGENT, "Referer": "https://www.bilibili.com/"}
-                if self.cookie:
-                    h["Cookie"] = f"SESSDATA={self.cookie}"
+                h = self._headers()
                 params = {"bvid": bvid}
                 if self._img_key and self._sub_key:
                     params = _wbi_sign(params, self._img_key, self._sub_key)
@@ -343,9 +364,7 @@ class BilibiliAdapter(PlatformAdapter):
             comments = []
             next_offset = ""
             async with AsyncSession(impersonate=IMPERSONATE) as c:
-                h = {"User-Agent": USERAGENT, "Referer": "https://www.bilibili.com/"}
-                if self.cookie:
-                    h["Cookie"] = f"SESSDATA={self.cookie}"
+                h = self._headers()
                 while len(comments) < max_count:
                     url = f"{BASE_URL}/x/v2/reply/main"
                     params = {"oid": str(aid), "type": "1", "mode": "3"}
@@ -389,9 +408,7 @@ class BilibiliAdapter(PlatformAdapter):
         try:
             from curl_cffi.requests import AsyncSession
             async with AsyncSession(impersonate=IMPERSONATE) as c:
-                h = {"User-Agent": USERAGENT, "Referer": "https://www.bilibili.com/"}
-                if self.cookie:
-                    h["Cookie"] = f"SESSDATA={self.cookie}"
+                h = self._headers()
                 params = {"mid": mid}
                 if self._img_key and self._sub_key:
                     params = _wbi_sign(params, self._img_key, self._sub_key)
