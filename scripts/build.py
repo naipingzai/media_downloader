@@ -29,6 +29,7 @@ def get_pyinstaller_cmd():
     ffmpeg_name = "ffmpeg.exe" if is_win else "ffmpeg"
     ffmpeg_path = BUILD_DIR / ffmpeg_name
     qss_path = ROOT / "ui" / "gui" / "resources" / "styles.qss"
+    svg_path = ROOT / "static" / "check.svg"
 
     cmd = [
         sys.executable, "-m", "PyInstaller",
@@ -40,6 +41,7 @@ def get_pyinstaller_cmd():
         "--additional-hooks-dir", str(ROOT / "hooks"),
         f"--add-data", f"{ffmpeg_path}{sep}.",
         f"--add-data", f"{qss_path}{sep}ui/gui/resources",
+        f"--add-data", f"{svg_path}{sep}static",
         # Core dependencies
         "--hidden-import", "curl_cffi",
         "--hidden-import", "curl_cffi._curl_cffi",

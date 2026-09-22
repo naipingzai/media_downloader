@@ -32,10 +32,19 @@ class FFmpegManager:
             p = Path(custom_path)
             if p.is_file():
                 return p
-        # 优先查找内置 FFmpeg
+        # 优先查找内置 FFmpeg（_MEIPASS 临时解压目录）
         for bp in _bundled_candidates():
             if bp.is_file():
                 return bp
+        # 同目录下查找（开发模式或手动放置）
+        from shared.core.constants import ROOT
+        local = ROOT / "ffmpeg"
+        if local.is_file():
+            return local
+        if platform.system() == "Windows":
+            local_exe = ROOT / "ffmpeg.exe"
+            if local_exe.is_file():
+                return local_exe
         # 查找系统 FFmpeg
         found = shutil.which("ffmpeg")
         if found:

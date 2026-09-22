@@ -4,11 +4,19 @@ from pathlib import Path
 
 # ======================== 路径 ========================
 
-ROOT: Path = (
-    Path(sys.executable).resolve().parent
-    if getattr(sys, "frozen", False)
-    else Path(__file__).resolve().parent.parent.parent
-)
+# _MEIPASS = PyInstaller 临时解压目录（用于读取捆绑资源如 ffmpeg、qss）
+_MEIPASS: Path = Path(getattr(sys, "_MEIPASS", ""))
+
+# ROOT = 可执行文件所在目录（数据存储位置）
+# 注意：不能用 sys.executable，因为 onefile 模式下可能指向临时目录
+if getattr(sys, "frozen", False):
+    # PyInstaller onefile: 用 sys.argv[0] 获取真实可执行文件路径
+    ROOT = Path(sys.argv[0]).resolve().parent
+    if not ROOT.exists():
+        ROOT = Path(sys.executable).resolve().parent
+else:
+    ROOT = Path(__file__).resolve().parent.parent.parent
+
 VOLUME: Path = ROOT / "Volume"
 VOLUME.mkdir(exist_ok=True)
 

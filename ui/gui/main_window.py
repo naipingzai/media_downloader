@@ -401,7 +401,17 @@ class MainWindow(QMainWindow):
             # 下载结果 → 输出结果面板
             files = result.get("files", [])
             if files:
-                source = self._last_exec.get("feature_id", "") if hasattr(self, "_last_exec") else ""
+                fid = self._last_exec.get("feature_id", "") if hasattr(self, "_last_exec") else ""
+                # 功能ID → 中文名称
+                _feature_names = {
+                    "download": "下载单个作品", "account": "批量下载账号",
+                    "mix": "批量下载合集", "collection": "收藏视频",
+                    "collection_album": "收藏合集", "favorite_folder": "收藏夹",
+                    "live": "直播录制", "comment": "评论采集",
+                    "user": "用户信息", "search": "搜索结果",
+                    "hot": "热榜", "series": "合集/系列",
+                }
+                source = _feature_names.get(fid, fid)
                 self._output_result.set_download_results(files, result.get("message", "下载结果"), source=source)
             # 采集数据 → 输出结果面板
             data = result.get("data")

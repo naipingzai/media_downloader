@@ -75,11 +75,16 @@ QHeaderView::section {
 QCheckBox { color: #e2e8f0; }
 QCheckBox::indicator {
     width: 16px; height: 16px;
-    border: 1px solid #475569;
+    border: 2px solid #64748b;
     border-radius: 3px;
-    background: #1e293b;
+    background: transparent;
 }
 QCheckBox::indicator:checked {
-    background: #3b82f6;
     border-color: #3b82f6;
+    background: transparent;
+    image: url(none);
+}
+QCheckBox::indicator:unchecked {
+    border-color: #64748b;
+    background: transparent;
 }
