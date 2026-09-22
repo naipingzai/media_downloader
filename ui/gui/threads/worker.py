@@ -1,5 +1,6 @@
 """FeatureWorker - 后台执行线程，调用 PlatformBus。"""
 import asyncio
+import threading
 from pathlib import Path
 from PySide6.QtCore import QObject, QRunnable, Signal
 
@@ -22,7 +23,12 @@ class FeatureWorker(QRunnable):
         self.save_dir = Path(save_dir)
         self.selected = selected  # 批量预览后用户勾选的 work_id 列表
         self.signals = WorkerSignals()
+        self.stop_event = threading.Event()  # 用于通知录制停止
         self.setAutoDelete(True)
+
+    def stop(self):
+        """外部调用：通知录制线程停止。"""
+        self.stop_event.set()
 
     def run(self):
         from shared.core.ops import PlatformBus
@@ -39,7 +45,8 @@ class FeatureWorker(QRunnable):
             result = loop.run_until_complete(
                 PlatformBus.run(self.platform, self.feature_id,
                               self.url, self.cookie, self.save_dir,
-                              on_log=_emit_log, selected=self.selected)
+                              on_log=_emit_log, selected=self.selected,
+                              stop_event=self.stop_event)
             )
             # emit remaining log lines that weren't streamed
             for line in result.log:

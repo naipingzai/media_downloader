@@ -38,21 +38,25 @@ class PlatformOps(ABC):
 
     async def execute(self, feature_id: str, url: str,
                       cookie: str, save_dir: Path,
-                      on_log=None, selected: list[str] | None = None) -> FeatureResult:
+                      on_log=None, selected: list[str] | None = None,
+                      stop_event=None) -> FeatureResult:
         self._on_log = on_log
         method = getattr(self, f"_do_{feature_id}", None)
         if method is None:
             return FeatureResult(False, f"功能 {feature_id} 未实现")
-        # 选择性下载：仅当 _do_xxx 声明了 selected 参数才透传，
-        # 兼容未改造的旧签名 (url, cookie, save_dir)。
-        if selected is not None:
-            import inspect
-            try:
-                params = inspect.signature(method).parameters
-            except (TypeError, ValueError):
-                params = {}
-            if "selected" in params:
-                return await method(url, cookie, save_dir, selected=selected)
+        # 透传 stop_event（仅当 _do_xxx 声明了该参数）
+        import inspect
+        try:
+            params = inspect.signature(method).parameters
+        except (TypeError, ValueError):
+            params = {}
+        kwargs = {}
+        if stop_event is not None and "stop_event" in params:
+            kwargs["stop_event"] = stop_event
+        if selected is not None and "selected" in params:
+            kwargs["selected"] = selected
+        if kwargs:
+            return await method(url, cookie, save_dir, **kwargs)
         return await method(url, cookie, save_dir)
 
     def log(self, msg: str):
@@ -93,9 +97,11 @@ class PlatformBus:
     @classmethod
     async def run(cls, platform: str, feature_id: str,
                   url: str, cookie: str, save_dir: Path,
-                  on_log=None, selected: list[str] | None = None) -> FeatureResult:
+                  on_log=None, selected: list[str] | None = None,
+                  stop_event=None) -> FeatureResult:
         ops = cls._registry.get(platform)
         if ops is None:
             return FeatureResult(False, f"平台 {platform} 未注册")
         return await ops.execute(feature_id, url, cookie, save_dir,
-                                 on_log=on_log, selected=selected)
+                                 on_log=on_log, selected=selected,
+                                 stop_event=stop_event)

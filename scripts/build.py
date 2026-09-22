@@ -96,9 +96,13 @@ def setup_linux_ffmpeg():
         download_file(FFMPEG_LINUX_URL, archive)
     print("  Extracting...")
     subprocess.run(["tar", "xf", str(archive), "-C", str(BUILD_DIR)], check=True)
+    dest = BUILD_DIR / "ffmpeg"
+    if dest.exists() and dest.is_file():
+        dest.chmod(0o755)
+        print(f"  FFmpeg (already exists): {dest}")
+        return dest
     for f in BUILD_DIR.rglob("ffmpeg"):
-        if f.is_file():
-            dest = BUILD_DIR / "ffmpeg"
+        if f.is_file() and f != dest:
             shutil.copy2(f, dest)
             dest.chmod(0o755)
             print(f"  FFmpeg: {dest}")

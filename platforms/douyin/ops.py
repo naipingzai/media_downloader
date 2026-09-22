@@ -242,7 +242,7 @@ class DouyinOps(PlatformOps):
         finally:
             await adapter.close()
 
-    async def _do_live(self, url, cookie, save_dir) -> FeatureResult:
+    async def _do_live(self, url, cookie, save_dir, stop_event=None) -> FeatureResult:
         adapter = await self._get_adapter(cookie)
         storage = ConfigManager.get_storage_ops("douyin")
         try:
@@ -341,17 +341,19 @@ class DouyinOps(PlatformOps):
                 "-f", "mpegts",
                 output_path,
             ]
-            log.append(f"  录制中... (Ctrl+C 可停止)")
+            log.append(f"  录制中... (点击「停止录制」结束)")
 
             try:
                 process = subprocess.Popen(
                     cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
                 )
-                # 等待一段时间录制 (30秒用于测试，实际可设更长)
+                # 无时长上限，持续录制直到 stop_event 被设置
                 import time
                 start = time.time()
-                record_seconds = 30
-                while process.poll() is None and (time.time() - start) < record_seconds:
+                while process.poll() is None:
+                    if stop_event is not None and stop_event.is_set():
+                        process.terminate()
+                        break
                     await asyncio.sleep(1)
 
                 if process.poll() is None:

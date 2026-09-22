@@ -13,12 +13,14 @@ LIVE_FEATURES = {"live", "tk_live"}
 
 class FeaturePanel(QWidget):
     execute_clicked = Signal(str, str, dict)
+    stop_recording_clicked = Signal()
     preview_clicked = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("Panel")
         self.setAttribute(Qt.WA_StyledBackground, True)
+        self._recording = False
         outer = QVBoxLayout(self)
         outer.setContentsMargins(2, 2, 2, 2)
         outer.setSpacing(0)
@@ -73,6 +75,11 @@ class FeaturePanel(QWidget):
         self.exec_btn.setObjectName("PrimaryButton")
         self.exec_btn.clicked.connect(self._on_execute)
         r6.addWidget(self.exec_btn)
+        self.stop_btn = QPushButton("停止录制")
+        self.stop_btn.setObjectName("DangerButton")
+        self.stop_btn.setVisible(False)
+        self.stop_btn.clicked.connect(self._on_stop)
+        r6.addWidget(self.stop_btn)
         r6.addStretch()
         layout.addLayout(r6)
 
@@ -84,11 +91,23 @@ class FeaturePanel(QWidget):
         self.fn_combo.blockSignals(True)
         self.fn_combo.clear()
         self.url_input.clear()
+        self._recording = False
+        self._update_buttons()
         for f in features:
             self.fn_combo.addItem(f.name, f.id)
         self.fn_combo.blockSignals(False)
         if features:
             self.fn_combo.setCurrentIndex(0)
+
+    def set_recording(self, recording: bool):
+        """外部调用：切换录制/正常状态。"""
+        self._recording = recording
+        self._update_buttons()
+
+    def _update_buttons(self):
+        is_live = (self.fn_combo.currentData() or "") in LIVE_FEATURES
+        self.exec_btn.setVisible(not self._recording)
+        self.stop_btn.setVisible(self._recording and is_live)
 
     def _on_feature_changed(self, index):
         fid = self.fn_combo.currentData()
@@ -103,6 +122,7 @@ class FeaturePanel(QWidget):
         is_live = fid in LIVE_FEATURES
         for w in (self.danmaku_cb, self.subtitle_cb, self.cover_cb, self.metadata_cb):
             w.setVisible(not is_collect and not is_live)
+        self._update_buttons()
 
     def _on_execute(self):
         fid = self.fn_combo.currentData()
@@ -114,6 +134,9 @@ class FeaturePanel(QWidget):
                 "metadata": self.metadata_cb.isChecked(),
             }
             self.execute_clicked.emit(fid, self.url_input.text(), opts)
+
+    def _on_stop(self):
+        self.stop_recording_clicked.emit()
 
     def _current_platform(self):
         w = self.window()

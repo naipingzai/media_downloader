@@ -15,6 +15,9 @@ Caption { color: #94a3b8; font-size: 12px; }
 QPushButton { background: #334155; color: #e2e8f0; border: none; border-radius: 6px; padding: 8px 16px; min-height: 20px; }
 QPushButton:hover { background: #475569; }
 #PrimaryButton { background: #3b82f6; color: white; }
+#PrimaryButton:hover { background: #2563eb; }
+#DangerButton { background: #ef4444; color: white; }
+#DangerButton:hover { background: #dc2626; }
 QLineEdit, QComboBox {
     background: #1e293b;
     color: #e2e8f0;

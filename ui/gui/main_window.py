@@ -132,7 +132,9 @@ class MainWindow(QMainWindow):
         self._video_info = VideoInfoWidget(workspace)
         self._feature_panel = FeaturePanel(workspace)
         self._feature_panel.execute_clicked.connect(self._on_execute)
+        self._feature_panel.stop_recording_clicked.connect(self._on_stop_recording)
         self._feature_panel.preview_clicked.connect(self._on_preview)
+        self._current_worker = None  # 当前活跃的录制 worker
 
         self._output_result = OutputResultView(workspace)
         self._result_view = ResultView(workspace)
@@ -230,19 +232,25 @@ class MainWindow(QMainWindow):
         self._result_view.append(f"[{label}] 正在解析...")
         import asyncio
         from shared.core.session import create_async_client
-        from shared.flow.link import LinkExtractor
+        from shared.flow.link import LinkExtractor, LinkType
         async def _do():
             client = create_async_client()
             try:
                 links = await LinkExtractor(client).run(url, self._current_platform)
                 if links:
+                    link = links[0]
                     adapter_cls = get_platform(self._current_platform)
                     if adapter_cls:
                         from shared.core.adapter import PlatformConfig
                         adapter = adapter_cls(config=PlatformConfig(
                             name=self._current_platform, display_name="",
                             domains=[], cookie=self._cm.get(self._current_platform)))
-                        raw = await adapter.request_detail(links[0])
+                        # 直播链接 → 尝试获取直播信息，能解析到什么就显示什么
+                        if link.link_type == LinkType.LIVE:
+                            await self._preview_live(adapter, link.url)
+                            await adapter.close()
+                            return
+                        raw = await adapter.request_detail(link)
                         if raw:
                             work = adapter.parse_detail(raw)
                             if work:
@@ -264,6 +272,82 @@ class MainWindow(QMainWindow):
         loop = asyncio.new_event_loop()
         loop.run_until_complete(_do())
         loop.close()
+
+    async def _preview_live(self, adapter, url: str):
+        """直播链接预览：尝试获取直播信息，能解析到什么就显示什么。"""
+        from re import findall
+        from urllib.parse import urlparse
+        try:
+            parsed = urlparse(url.strip())
+            room_id = parsed.path.rstrip("/").split("/")[-1]
+            if room_id.isdigit() and len(room_id) <= 14:
+                pass
+            elif room_id and any(c.isalpha() for c in room_id) and len(room_id) >= 15:
+                pass
+            else:
+                nums = findall(r"\d{10,}", url)
+                room_id = nums[0] if nums else room_id
+            if not room_id:
+                self._video_info.show_error("无法提取房间号")
+                self._result_view.append("无法从链接提取房间号", "#ef4444")
+                return
+
+            is_web_rid = room_id.isdigit() and len(room_id) <= 14
+            self._result_view.append(f"房间号: {room_id} ({'web_rid' if is_web_rid else 'room_id_str'})")
+
+            if not hasattr(adapter, 'fetch_live'):
+                self._video_info.show_error("该平台不支持直播功能")
+                return
+
+            data = await adapter.fetch_live(
+                room_id if is_web_rid else "",
+                room_id_str="" if is_web_rid else room_id)
+
+            if not data:
+                self._video_info.show_error("获取直播信息失败（可能需要Cookie）")
+                self._result_view.append("获取直播信息失败", "#ef4444")
+                return
+
+            room_list = data.get("data", {}).get("data", [])
+            if not room_list:
+                self._video_info.show_error("房间不存在或未开播")
+                self._result_view.append("房间不存在或查询结果为空", "#ef4444")
+                return
+
+            room = room_list[0]
+            title = room.get("title", "")
+            owner = room.get("owner", {}).get("nickname", "")
+            status = room.get("status", 0)
+            stream = room.get("stream_url", {})
+            cover = room.get("cover", {}).get("url_list", [""])[0] if isinstance(room.get("cover"), dict) else ""
+
+            # 提取流地址
+            flv_map = stream.get("flv_pull_url_map") or stream.get("flv_pull_url") or {}
+            hls_map = stream.get("hls_pull_url_map") or {}
+            has_stream = bool(flv_map or hls_map)
+
+            work = {
+                "platform": self._current_platform,
+                "work_id": room_id,
+                "title": title,
+                "author_name": owner,
+                "cover_url": cover,
+                "status": "直播中" if status == 2 else "未开播",
+                "has_stream": has_stream,
+                "flv_qualities": list(flv_map.keys()) if isinstance(flv_map, dict) else [],
+                "hls_qualities": list(hls_map.keys()) if isinstance(hls_map, dict) else [],
+            }
+            self._video_info.show_work(work)
+            self._result_view.append(f"主播: {owner}", "#22c55e")
+            self._result_view.append(f"标题: {title}", "#22c55e")
+            self._result_view.append(f"状态: {'直播中' if status == 2 else '未开播'}", "#22c55e" if status == 2 else "#f59e0b")
+            if has_stream:
+                self._result_view.append(f"可用流: FLV={list(flv_map.keys()) if flv_map else '无'}, HLS={list(hls_map.keys()) if hls_map else '无'}", "#22c55e")
+            else:
+                self._result_view.append("未获取到流地址", "#f59e0b")
+        except Exception as e:
+            self._video_info.show_error(f"预览异常: {e}")
+            self._result_view.append(f"预览异常: {e}", "#ef4444")
 
     def _on_execute(self, feature_id, url, opts=None, selected=None):
         if not self._current_platform:
@@ -291,9 +375,23 @@ class MainWindow(QMainWindow):
         worker.signals.work_info.connect(lambda w: self._video_info.show_work(w))
         worker.signals.finished.connect(self._on_result)
         worker.signals.error.connect(lambda e: self._result_view.append(f"错误: {e}", "#ef4444"))
+        # 直播录制：记录 worker 并切换 UI 到录制状态
+        from .widgets.feature_panel import LIVE_FEATURES
+        if feature_id in LIVE_FEATURES:
+            self._current_worker = worker
+            self._feature_panel.set_recording(True)
         self._pool.start(worker)
 
+    def _on_stop_recording(self):
+        """停止当前录制。"""
+        if self._current_worker:
+            self._current_worker.stop()
+            self._result_view.append("正在停止录制...")
+
     def _on_result(self, result):
+        # 录制结束，重置 UI 状态
+        self._current_worker = None
+        self._feature_panel.set_recording(False)
         self._result_view.set_result(result)
         if result.get("success"):
             self.statusBar().showMessage(result.get("message", "完成"))
