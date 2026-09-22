@@ -129,13 +129,13 @@ class CardWidget(QFrame):
         self._update_check_style()
 
     def set_cover_pixmap(self, pix: QPixmap):
-        scaled = pix.scaled(COVER_W, COVER_H, Qt.KeepAspectRatioByExpanding,
+        # 按比例缩放显示完整封面（不裁剪）
+        scaled = pix.scaled(COVER_W, COVER_H, Qt.KeepAspectRatio,
                             Qt.SmoothTransformation)
-        x = max(0, (scaled.width() - COVER_W) // 2)
-        y = max(0, (scaled.height() - COVER_H) // 2)
-        cropped = scaled.copy(x, y, COVER_W, COVER_H)
-        self._cover.setPixmap(cropped)
-        self._cover.setStyleSheet("border-radius: 6px;")
+        self._cover.setPixmap(scaled)
+        self._cover.setStyleSheet(
+            "background: #0f172a; border-radius: 6px;")
+        self._cover.setFixedSize(COVER_W, COVER_H)
 
 
 class BatchPreviewDialog(QDialog):

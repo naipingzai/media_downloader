@@ -1,4 +1,5 @@
 """跨平台共享常量定义。"""
+import os
 import sys
 from pathlib import Path
 
@@ -7,18 +8,72 @@ from pathlib import Path
 # _MEIPASS = PyInstaller 临时解压目录（用于读取捆绑资源如 ffmpeg、qss）
 _MEIPASS: Path = Path(getattr(sys, "_MEIPASS", ""))
 
-# ROOT = 可执行文件所在目录（数据存储位置）
-# 注意：不能用 sys.executable，因为 onefile 模式下可能指向临时目录
-if getattr(sys, "frozen", False):
-    # PyInstaller onefile: 用 sys.argv[0] 获取真实可执行文件路径
-    ROOT = Path(sys.argv[0]).resolve().parent
-    if not ROOT.exists():
-        ROOT = Path(sys.executable).resolve().parent
-else:
-    ROOT = Path(__file__).resolve().parent.parent.parent
 
+def _resolve_root() -> Path:
+    """解析数据根目录（Volume 存放处）。
+
+    PyInstaller onefile 模式下 sys.executable / sys.argv[0] 可能指向
+    _MEIPASS 临时解压目录，绝不能把用户数据放那里（进程退出即删除）。
+    这里按优先级选取「不在 _MEIPASS 内」的真实可执行文件目录。
+    """
+    if not getattr(sys, "frozen", False):
+        return Path(__file__).resolve().parent.parent.parent
+
+    meipass = None
+    if getattr(sys, "_MEIPASS", ""):
+        try:
+            meipass = Path(sys._MEIPASS).resolve()
+        except Exception:
+            meipass = None
+
+    def _inside_meipass(d: Path) -> bool:
+        if meipass is None:
+            return False
+        try:
+            d = d.resolve()
+        except Exception:
+            return False
+        return d == meipass or meipass in d.parents
+
+    candidates: list[Path] = []
+    # 1) Linux: /proc/self/exe 永远指向真实可执行文件
+    try:
+        candidates.append(Path(os.readlink("/proc/self/exe")).resolve())
+    except Exception:
+        pass
+    # 2) sys.executable
+    if sys.executable:
+        try:
+            candidates.append(Path(sys.executable).resolve())
+        except Exception:
+            pass
+    # 3) sys.argv[0]
+    if sys.argv and sys.argv[0]:
+        try:
+            candidates.append(Path(sys.argv[0]).resolve())
+        except Exception:
+            pass
+    # 4) 当前工作目录兜底
+    try:
+        candidates.append(Path.cwd().resolve())
+    except Exception:
+        pass
+
+    for p in candidates:
+        d = p.parent if p.is_file() else p
+        if not _inside_meipass(d):
+            return d
+    return Path.home()
+
+
+ROOT: Path = _resolve_root()
 VOLUME: Path = ROOT / "Volume"
-VOLUME.mkdir(exist_ok=True)
+try:
+    VOLUME.mkdir(parents=True, exist_ok=True)
+except Exception:
+    # 极端情况下回退到用户主目录
+    VOLUME = Path.home() / "MediaDownloader" / "Volume"
+    VOLUME.mkdir(parents=True, exist_ok=True)
 
 # ======================== 版本 ========================
 
