@@ -100,7 +100,8 @@ class DouyinAdapter(PlatformAdapter):
 
     # ---- mix (collection of works) ----
     async def fetch_mix(self, mix_id: str, count: int = 20, cursor: int = 0) -> dict | None:
-        return await self._signed_get("https://www.douyin.com/aweme/v1/web/mix/aweme/", {"mix_id": mix_id, "count": str(count), "cursor": str(cursor)})
+        # 受保护接口必须携带 uifid 才会生成 WebSign，否则 403 Signature Not Found
+        return await self._signed_get("https://www.douyin.com/aweme/v1/web/mix/aweme/", {"mix_id": mix_id, "count": str(count), "cursor": str(cursor), "uifid": self.uifid, "msToken": ""})
 
     # ---- search ----
     async def fetch_search(self, keyword: str, offset: int = 0, count: int = 20) -> dict | None:
@@ -166,10 +167,20 @@ class DouyinAdapter(PlatformAdapter):
 
     # ---- collection / favorites ----
     async def fetch_collection(self, cursor: str = "0", count: int = 20) -> dict | None:
-        return await self._signed_get("https://www.douyin.com/aweme/v1/web/aweme/listcollection/", {"cursor": cursor, "count": str(count), "type": "1"})
+        """收藏的作品列表（需登录 Cookie）。type=1 为收藏的作品。"""
+        return await self._signed_get("https://www.douyin.com/aweme/v1/web/aweme/listcollection/", {"cursor": cursor, "count": str(count), "type": "1", "uifid": self.uifid, "msToken": ""})
+
+    async def fetch_collection_albums(self, cursor: str = "0", count: int = 20) -> dict | None:
+        """收藏的专辑（合集）列表（需登录 Cookie）。
+
+        抖音「我的收藏 → 专辑」入口；探测确认 endpoint 存在
+        （未登录返回 403 Argus 而非 404）。
+        """
+        return await self._signed_get("https://www.douyin.com/aweme/v1/web/mix/listcollection/", {"cursor": cursor, "count": str(count), "uifid": self.uifid, "msToken": ""})
 
     async def fetch_favorites(self, cursor: str = "0", count: int = 20) -> dict | None:
-        return await self._signed_get("https://www.douyin.com/aweme/v1/web/aweme/favorite/", {"cursor": cursor, "count": str(count), "sec_user_id": "", "mix_id": ""})
+        """喜欢的作品列表（需登录 Cookie）。"""
+        return await self._signed_get("https://www.douyin.com/aweme/v1/web/aweme/favorite/", {"cursor": cursor, "count": str(count), "sec_user_id": "", "mix_id": "", "uifid": self.uifid, "msToken": ""})
 
     # ---- hot ----
     async def fetch_hot_list(self) -> list[dict]:

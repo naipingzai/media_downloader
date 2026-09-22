@@ -1,5 +1,6 @@
 """抖音平台操作表 —— 完全自包含。"""
 import asyncio
+import time
 from pathlib import Path
 from shared.core.ops import PlatformOps, FeatureMeta, FeatureResult
 from shared.core.storage import StorageOps, safe_name
@@ -16,6 +17,7 @@ class DouyinOps(PlatformOps):
         FeatureMeta("account",    "批量下载账号作品",   True),
         FeatureMeta("mix",        "批量下载合集作品",   True),
         FeatureMeta("collection", "批量下载收藏作品",   True),
+        FeatureMeta("collection_album", "批量下载收藏专辑", True),
         FeatureMeta("live",       "获取直播拉流地址",   True),
         FeatureMeta("comment",    "采集作品评论数据",   True),
         FeatureMeta("user",       "采集账号详细数据",   True),
@@ -29,6 +31,20 @@ class DouyinOps(PlatformOps):
         return DouyinAdapter(config=PlatformConfig(
             name="douyin", display_name=self.display_name,
             domains=["douyin.com"], cookie=cookie))
+
+    # ---- 批量列表缓存：预览→选择→下载 两阶段避免重复翻页 ----
+    _CACHE_TTL = 1800  # 秒
+
+    def _cache_get(self, key: str):
+        ent = getattr(self, "_list_cache", {}).get(key)
+        if ent and time.time() - ent[0] < self._CACHE_TTL:
+            return ent[1]
+        return None
+
+    def _cache_put(self, key: str, items: list):
+        if not hasattr(self, "_list_cache"):
+            self._list_cache = {}
+        self._list_cache[key] = (time.time(), items)
 
     async def _do_download(self, url, cookie, save_dir) -> FeatureResult:
         adapter = await self._get_adapter(cookie)
@@ -77,53 +93,152 @@ class DouyinOps(PlatformOps):
         finally:
             await adapter.close()
 
-    async def _do_account(self, url, cookie, save_dir) -> FeatureResult:
+    async def _do_account(self, url, cookie, save_dir, selected=None) -> FeatureResult:
         adapter = await self._get_adapter(cookie)
         storage = ConfigManager.get_storage_ops("douyin")
         try:
             sec_uid = await self._resolve_sec_uid(adapter, url)
             if not sec_uid:
                 return FeatureResult(False, "无法获取用户信息，请输入用户主页链接")
-            # 分页获取所有作品
-            all_awemes = []
-            max_cursor = "0"
-            for _ in range(50):  # 最多50页
-                data = await adapter.fetch_user_posts(sec_uid, count=20, max_cursor=max_cursor)
-                if not data:
-                    break
-                awemes = data.get("aweme_list", [])
-                if not awemes:
-                    break
-                all_awemes.extend(awemes)
-                if not data.get("has_more", False):
-                    break
-                max_cursor = str(data.get("max_cursor", ""))
-            if not all_awemes:
-                return FeatureResult(False, "获取作品列表失败或为空")
-            return await self._batch_download(adapter, all_awemes, storage)
+            cache_key = f"dy_account:{sec_uid}"
+            all_awemes = self._cache_get(cache_key)
+            if all_awemes is None:
+                # 分页获取所有作品
+                all_awemes = []
+                max_cursor = "0"
+                for _ in range(50):  # 最多50页
+                    data = await adapter.fetch_user_posts(sec_uid, count=20, max_cursor=max_cursor)
+                    if not data:
+                        break
+                    awemes = data.get("aweme_list") or []
+                    if not awemes:
+                        break
+                    all_awemes.extend(awemes)
+                    if not data.get("has_more", False):
+                        break
+                    max_cursor = str(data.get("max_cursor") or "")
+                    if not max_cursor:
+                        break
+                if not all_awemes:
+                    return FeatureResult(False, "获取作品列表失败或为空")
+                self._cache_put(cache_key, all_awemes)
+            return await self._batch_download(adapter, all_awemes, storage,
+                                              selected=selected)
         finally:
             await adapter.close()
 
-    async def _do_mix(self, url, cookie, save_dir) -> FeatureResult:
+    async def _do_mix(self, url, cookie, save_dir, selected=None) -> FeatureResult:
         adapter = await self._get_adapter(cookie)
         storage = ConfigManager.get_storage_ops("douyin")
         try:
-            mix_id = url.strip().rstrip("/").split("/")[-1]
-            data = await adapter.fetch_mix(mix_id)
-            if not data:
-                return FeatureResult(False, "获取合集失败")
-            return await self._batch_download(adapter, data.get("aweme_list", []), storage)
+            mix_id = self._extract_mix_id(url)
+            if not mix_id:
+                return FeatureResult(False, "无法提取合集 ID，请输入合集链接")
+            aweme_list = self._cache_get(f"dy_mix:{mix_id}")
+            if aweme_list is None:
+                aweme_list = await self._fetch_mix_awemes(adapter, mix_id)
+                if not aweme_list:
+                    return FeatureResult(False, "获取合集失败或合集为空")
+                self._cache_put(f"dy_mix:{mix_id}", aweme_list)
+            return await self._batch_download(adapter, aweme_list, storage,
+                                              selected=selected)
         finally:
             await adapter.close()
 
-    async def _do_collection(self, url, cookie, save_dir) -> FeatureResult:
+    async def _do_collection(self, url, cookie, save_dir, selected=None) -> FeatureResult:
         adapter = await self._get_adapter(cookie)
         storage = ConfigManager.get_storage_ops("douyin")
         try:
-            data = await adapter.fetch_collection()
-            if not data:
-                return FeatureResult(False, "获取收藏失败")
-            return await self._batch_download(adapter, data.get("aweme_list", []), storage)
+            aweme_list = self._cache_get("dy_collection:me")
+            if aweme_list is None:
+                aweme_list = []
+                cursor = "0"
+                for _ in range(50):
+                    data = await adapter.fetch_collection(cursor=cursor, count=20)
+                    if not data:
+                        break
+                    awemes = data.get("aweme_list") or []
+                    if not awemes:
+                        break
+                    aweme_list.extend(awemes)
+                    if not data.get("has_more"):
+                        break
+                    cursor = str(data.get("cursor") or "0")
+                    if cursor == "0":
+                        break
+                if not aweme_list:
+                    if not cookie:
+                        return FeatureResult(False, "获取收藏失败：收藏功能需要登录，请先配置抖音 Cookie")
+                    return FeatureResult(False, "获取收藏失败或收藏为空（Cookie 可能已失效）")
+                self._cache_put("dy_collection:me", aweme_list)
+            return await self._batch_download(adapter, aweme_list, storage,
+                                              selected=selected)
+        finally:
+            await adapter.close()
+
+    async def _do_collection_album(self, url, cookie, save_dir, selected=None) -> FeatureResult:
+        """批量下载收藏专辑（「我的收藏 → 专辑」里的合集）。
+
+        url 留空 = 全部收藏专辑；填合集链接或 mix_id = 只下载该专辑。
+        """
+        adapter = await self._get_adapter(cookie)
+        storage = ConfigManager.get_storage_ops("douyin")
+        try:
+            # 指定了单个专辑 → 直接按合集处理
+            direct_mix = self._extract_mix_id(url) if url.strip() else ""
+            if direct_mix:
+                aweme_list = await self._fetch_mix_awemes(adapter, direct_mix)
+                if not aweme_list:
+                    return FeatureResult(False, "获取专辑作品失败或专辑为空")
+                items = [self._aweme_preview(aw) for aw in aweme_list]
+                return await self._batch_download(adapter, aweme_list, storage,
+                                                  selected=selected,
+                                                  preview_items=items)
+            cache_key = "dy_collection_album:me"
+            aweme_list = self._cache_get(cache_key)
+            preview_items = None
+            if aweme_list is None:
+                # 1) 拉收藏的专辑列表
+                albums, cursor = [], "0"
+                for _ in range(10):
+                    data = await adapter.fetch_collection_albums(cursor=cursor, count=20)
+                    if not data:
+                        break
+                    mix_list = (data.get("mix_list")
+                                or (data.get("data") or {}).get("mix_list")
+                                or data.get("medias") or [])
+                    if not mix_list:
+                        break
+                    albums.extend(mix_list)
+                    if not data.get("has_more"):
+                        break
+                    cursor = str(data.get("cursor") or "0")
+                    if cursor == "0":
+                        break
+                if not albums:
+                    if not cookie:
+                        return FeatureResult(False, "获取收藏专辑失败：需要登录，请先配置抖音 Cookie")
+                    return FeatureResult(False, "获取收藏专辑失败或为空（Cookie 可能已失效）")
+                # 2) 逐专辑拉作品（flatten），带上所属专辑名
+                aweme_list, preview_items = [], []
+                for al in albums[:30]:
+                    mix_id = str(al.get("mix_id") or al.get("id") or "")
+                    name = str(al.get("name") or al.get("mix_name") or "")
+                    if not mix_id:
+                        continue
+                    aws = await self._fetch_mix_awemes(adapter, mix_id, max_pages=20)
+                    for aw in aws:
+                        aw["_mix_name"] = name
+                        aweme_list.append(aw)
+                        preview_items.append(self._aweme_preview(aw, extra=name))
+                    if len(aweme_list) >= 3000:  # 上限保护
+                        break
+                if not aweme_list:
+                    return FeatureResult(False, "收藏专辑中没有作品")
+                self._cache_put(cache_key, aweme_list)
+            return await self._batch_download(adapter, aweme_list, storage,
+                                              selected=selected,
+                                              preview_items=preview_items)
         finally:
             await adapter.close()
 
@@ -338,11 +453,26 @@ class DouyinOps(PlatformOps):
         finally:
             await adapter.close()
 
-    async def _batch_download(self, adapter, aweme_list, storage):
+    async def _batch_download(self, adapter, aweme_list, storage,
+                              selected=None, preview_items=None):
+        """批量下载入口。selected=None → 第一阶段只返回预览；否则下载勾选项。"""
+        if selected is None:
+            items = preview_items if preview_items is not None else [
+                self._aweme_preview(aw) for aw in aweme_list]
+            if not items:
+                return FeatureResult(False, "作品列表为空")
+            return FeatureResult(True, f"共 {len(items)} 个作品，待选择下载",
+                                 data=items, preview="batch")
+        # 第二阶段：按勾选的 work_id 过滤下载
+        sel = {str(s) for s in selected}
+        targets = [aw for aw in aweme_list
+                   if str(aw.get("aweme_id", "")) in sel]
+        if not targets:
+            return FeatureResult(False, "未匹配到勾选的作品（列表可能已过期，请重新执行）")
         from shared.flow.download import FileDownloader
         from shared.core.session import create_async_client
         log, files = [], []
-        for i, aw in enumerate(aweme_list, 1):
+        for i, aw in enumerate(targets, 1):
             aweme_id = aw.get("aweme_id", "")
             desc = aw.get("desc", "")[:40]
             author = aw.get("author", {}).get("nickname", "unknown")
@@ -350,7 +480,7 @@ class DouyinOps(PlatformOps):
                 "platform": "douyin", "work_id": aweme_id,
                 "title": desc or "untitled", "author_name": author,
             }
-            msg = f"  [{i}/{len(aweme_list)}] {author}: {desc}"
+            msg = f"  [{i}/{len(targets)}] {author}: {desc}"
             log.append(msg); self.log(msg)
             video = aw.get("video", {})
             play = video.get("play_addr", {}).get("url_list", [])
@@ -374,7 +504,69 @@ class DouyinOps(PlatformOps):
                     msg = "    ✗ 下载失败"; log.append(msg); self.log(msg)
             finally:
                 await dlc.close()
-        return FeatureResult(True, f"批量下载 {len(files)}/{len(aweme_list)} 个", log=log, files=files)
+        return FeatureResult(True, f"批量下载 {len(files)}/{len(targets)} 个",
+                             log=log, files=files)
+
+    @staticmethod
+    def _aweme_preview(aw: dict, extra: str = "") -> dict:
+        """aweme dict → 预览条目（封面/标题/作者/时长/点赞）。"""
+        author = aw.get("author") or {}
+        video = aw.get("video") or {}
+        cover = ""
+        for key in ("cover", "origin_cover", "dynamic_cover"):
+            c = video.get(key)
+            if isinstance(c, dict):
+                urls = c.get("url_list") or []
+                if urls:
+                    cover = urls[0]
+                    break
+        try:
+            duration = int(video.get("duration") or 0) // 1000
+        except (TypeError, ValueError):
+            duration = 0
+        return {
+            "platform": "douyin",
+            "work_id": str(aw.get("aweme_id") or ""),
+            "title": aw.get("desc") or "",
+            "author_name": author.get("nickname", ""),
+            "cover": cover,
+            "duration": duration,
+            "digg_count": (aw.get("statistics") or {}).get("digg_count", 0),
+            "extra": extra or aw.get("_mix_name", ""),
+        }
+
+    @staticmethod
+    def _extract_mix_id(url: str) -> str:
+        """从合集链接/纯 ID 提取 mix_id。"""
+        url = (url or "").strip()
+        if not url:
+            return ""
+        if "mix_id=" in url:
+            return url.split("mix_id=")[-1].split("&")[0].split("?")[0]
+        s = url.rstrip("/").split("/")[-1].split("?")[0]
+        if s.isdigit():
+            return s
+        from re import search
+        m = search(r"mix/(\d+)", url)
+        return m.group(1) if m else ""
+
+    async def _fetch_mix_awemes(self, adapter, mix_id: str, max_pages: int = 50) -> list:
+        """分页抓取单个合集的全部作品。"""
+        aweme_list, cursor = [], 0
+        for _ in range(max_pages):
+            data = await adapter.fetch_mix(mix_id, count=20, cursor=cursor)
+            if not data:
+                break
+            awemes = data.get("aweme_list") or []
+            if not awemes:
+                break
+            aweme_list.extend(awemes)
+            if not data.get("has_more"):
+                break
+            cursor = int(data.get("cursor") or 0)
+            if not cursor:
+                break
+        return aweme_list
 
     async def _resolve_sec_uid(self, adapter, url: str) -> str:
         if "sec_user_id=" in url:

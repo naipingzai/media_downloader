@@ -15,6 +15,9 @@ class FeatureResult:
     data: list[dict] | None = None
     log: list[str] = field(default_factory=list)
     files: list[str] = field(default_factory=list)
+    # "batch" = 批量预览：data 为待选条目（含 work_id/title/cover 等），
+    # UI 弹出选择框让用户勾选后，带 selected 再次执行同一功能。
+    preview: str = ""
 
 
 @dataclass(frozen=True)
@@ -35,11 +38,21 @@ class PlatformOps(ABC):
 
     async def execute(self, feature_id: str, url: str,
                       cookie: str, save_dir: Path,
-                      on_log=None) -> FeatureResult:
+                      on_log=None, selected: list[str] | None = None) -> FeatureResult:
         self._on_log = on_log
         method = getattr(self, f"_do_{feature_id}", None)
         if method is None:
             return FeatureResult(False, f"功能 {feature_id} 未实现")
+        # 选择性下载：仅当 _do_xxx 声明了 selected 参数才透传，
+        # 兼容未改造的旧签名 (url, cookie, save_dir)。
+        if selected is not None:
+            import inspect
+            try:
+                params = inspect.signature(method).parameters
+            except (TypeError, ValueError):
+                params = {}
+            if "selected" in params:
+                return await method(url, cookie, save_dir, selected=selected)
         return await method(url, cookie, save_dir)
 
     def log(self, msg: str):
@@ -80,8 +93,9 @@ class PlatformBus:
     @classmethod
     async def run(cls, platform: str, feature_id: str,
                   url: str, cookie: str, save_dir: Path,
-                  on_log=None) -> FeatureResult:
+                  on_log=None, selected: list[str] | None = None) -> FeatureResult:
         ops = cls._registry.get(platform)
         if ops is None:
             return FeatureResult(False, f"平台 {platform} 未注册")
-        return await ops.execute(feature_id, url, cookie, save_dir, on_log=on_log)
+        return await ops.execute(feature_id, url, cookie, save_dir,
+                                 on_log=on_log, selected=selected)

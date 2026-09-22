@@ -146,6 +146,14 @@ _TRANSLATIONS = {
         # Hero
         "select_platform_start": "选择平台开始",
         "features_available": "{count} 个功能可用",
+        # 批量预览
+        "batch_preview_title": "批量下载预览",
+        "batch_select_hint": "共 {count} 项，已选 {selected} 项",
+        "batch_select_all": "全选",
+        "batch_select_none": "清空",
+        "batch_select_invert": "反选",
+        "batch_download_selected": "下载所选 ({count})",
+        "duration_col": "时长/点赞",
     },
     "en": {
         # Platform names
@@ -285,6 +293,14 @@ _TRANSLATIONS = {
         # Hero
         "select_platform_start": "Select a platform to start",
         "features_available": "{count} features available",
+        # Batch preview
+        "batch_preview_title": "Batch Download Preview",
+        "batch_select_hint": "{count} items, {selected} selected",
+        "batch_select_all": "All",
+        "batch_select_none": "None",
+        "batch_select_invert": "Invert",
+        "batch_download_selected": "Download Selected ({count})",
+        "duration_col": "Duration/Likes",
     },
 }
 

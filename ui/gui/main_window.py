@@ -265,18 +265,28 @@ class MainWindow(QMainWindow):
         loop.run_until_complete(_do())
         loop.close()
 
-    def _on_execute(self, feature_id, url, opts=None):
+    def _on_execute(self, feature_id, url, opts=None, selected=None):
         if not self._current_platform:
             self.statusBar().showMessage(t("select_platform_hint"))
             return
         self._result_view.clear()
         self._output_result.show_empty()
         label = platform_name(self._current_platform)
-        self._result_view.append(f"[{label}] 执行 {feature_id}...")
+        if selected:
+            self._result_view.append(f"[{label}] 执行 {feature_id}（已选 {len(selected)} 项）...")
+        else:
+            self._result_view.append(f"[{label}] 执行 {feature_id}...")
+        # 记录本次执行上下文，批量预览确认后带 selected 重新执行
+        self._last_exec = {
+            "platform": self._current_platform,
+            "feature_id": feature_id,
+            "url": url,
+        }
         cookie = self._cm.get(self._current_platform)
         save_dir = VOLUME / self._current_platform
         save_dir.mkdir(parents=True, exist_ok=True)
-        worker = FeatureWorker(self._current_platform, feature_id, url, cookie, str(save_dir))
+        worker = FeatureWorker(self._current_platform, feature_id, url,
+                               cookie, str(save_dir), selected=selected)
         worker.signals.log_line.connect(lambda t: self._result_view.append(t))
         worker.signals.work_info.connect(lambda w: self._video_info.show_work(w))
         worker.signals.finished.connect(self._on_result)
@@ -287,6 +297,10 @@ class MainWindow(QMainWindow):
         self._result_view.set_result(result)
         if result.get("success"):
             self.statusBar().showMessage(result.get("message", "完成"))
+            # 批量预览：弹出选择框，用户勾选后再带 selected 二次执行
+            if result.get("preview") == "batch" and result.get("data"):
+                self._open_batch_preview(result["data"])
+                return
             # 下载结果 → 输出结果面板
             files = result.get("files", [])
             if files:
@@ -305,3 +319,16 @@ class MainWindow(QMainWindow):
                 self._output_result.show_user(data)
         else:
             self.statusBar().showMessage(f"失败: {result.get('message', '')}")
+
+    def _open_batch_preview(self, items):
+        """批量抓取完成 → 弹预览选择框 → 用户确认后带勾选结果二次执行。"""
+        from PySide6.QtWidgets import QDialog
+        from .widgets.batch_preview import BatchPreviewDialog
+        dlg = BatchPreviewDialog(items, self)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        ids = dlg.selected_ids()
+        ctx = getattr(self, "_last_exec", None) or {}
+        if not ids or not ctx.get("feature_id"):
+            return
+        self._on_execute(ctx["feature_id"], ctx.get("url", ""), selected=ids)
