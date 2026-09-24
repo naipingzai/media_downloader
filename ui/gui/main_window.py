@@ -35,7 +35,7 @@ from .threads.worker import FeatureWorker
 from .widgets.feature_panel import FeaturePanel
 from .widgets.video_info import VideoInfoWidget
 from .widgets.author_profile_panel import AuthorProfilePanel
-from .widgets.collapsible_log import CollapsibleLog
+from .widgets.log_panel import LogPanel
 from .widgets.section_panel import SectionPanel
 from .widgets.embedded_tabs import EmbeddedTabs
 from .pages.work_grid_page import WorkGridPage
@@ -364,9 +364,38 @@ class MainWindow(QMainWindow):
         v.setContentsMargins(10, 10, 10, 8)
         v.setSpacing(8)
 
-        # 1) 链接栏
+        # ---- 各区域固定高度, 不允许拉伸 (位置全部锁定) ----
+
+        # 1) 链接栏 (固定高 56)
+        sec_link = self._build_link_panel()
+        v.addWidget(sec_link)
+
+        # 2) 作者资料卡 (固定高 140)
+        sec_author = self._build_author_panel()
+        v.addWidget(sec_author)
+
+        # 3) 作品资料区 (多页内嵌) —— 固定高, 不随窗口伸缩
+        sec_video = self._build_video_panel()
+        v.addWidget(sec_video, 1)        # 占剩余空间 (动态区域)
+
+        # 4) 功能面板 (固定高 200)
+        sec_feat = self._build_feature_section()
+        v.addWidget(sec_feat)
+
+        # 5) 静态日志条 (固定高 140, 不可展开)
+        sec_log = self._build_log_section()
+        v.addWidget(sec_log)
+
+        shell.addWidget(right)
+
+        if "douyin" in PlatformBus.list_platforms():
+            self._select_platform("douyin")
+
+    # ---------------- 各区域 (固定高度构造) ----------------
+    def _build_link_panel(self) -> SectionPanel:
         link_bar = QFrame()
         link_bar.setObjectName("LinkBar")
+        link_bar.setFixedHeight(48)
         link_bar.setStyleSheet(
             "#LinkBar { background: transparent; border: none; }")
         h = QHBoxLayout(link_bar)
@@ -383,48 +412,52 @@ class MainWindow(QMainWindow):
         preview_btn.setCursor(Qt.PointingHandCursor)
         preview_btn.clicked.connect(self._on_preview)
         h.addWidget(preview_btn)
-        sec_link = SectionPanel("链接")
-        sec_link.addWidget(link_bar)
-        v.addWidget(sec_link)
+        sec = SectionPanel("链接")
+        sec.addWidget(link_bar)
+        sec.setFixedHeight(86)        # 标题 + 输入框高度
+        return sec
 
-        # 2) 作者资料卡
+    def _build_author_panel(self) -> SectionPanel:
         self._author_panel = AuthorProfilePanel()
         self._author_panel.fetch_works_clicked.connect(self._on_fetch_works)
         self._author_panel.follow_list_clicked.connect(self._on_follow_list)
         self._author_panel.collect_list_clicked.connect(self._on_collect_list)
         self._author_panel.download_avatar_clicked.connect(self._on_download_avatar)
         self._author_panel.open_home_clicked.connect(self._on_open_home)
-        sec_author = SectionPanel("作者资料")
-        sec_author.addWidget(self._author_panel)
-        v.addWidget(sec_author)
+        sec = SectionPanel("作者资料")
+        sec.addWidget(self._author_panel)
+        sec.setFixedHeight(160)
+        return sec
 
-        # 3) 作品资料区 (多页内嵌) —— 与原版布局同位置
+    def _build_video_panel(self) -> SectionPanel:
         self._video_info = VideoInfoWidget()
+        # 锁死高度 · 上下滚动交给内部 ScrollArea
+        self._video_info.setFixedHeight(360)
         self._tabs = EmbeddedTabs(self._video_info, default_title="作品资料")
-        sec_video = SectionPanel("作品资料")
-        sec_video.addWidget(self._tabs)
-        v.addWidget(sec_video, 1)        # 占主空间
+        sec = SectionPanel("作品资料")
+        sec.addWidget(self._tabs)
+        sec.setFixedHeight(400)        # 标题 + 4px padding + 内容
+        return sec
 
-        # 4) 功能面板
-        self._feature_panel = self._build_feature_panel()
+    def _build_feature_section(self) -> SectionPanel:
+        self._feature_panel = self._build_feature_panel_inner()
         feat_scroll = QScrollArea()
         feat_scroll.setWidgetResizable(True)
         feat_scroll.setFrameShape(QScrollArea.NoFrame)
         feat_scroll.setWidget(self._feature_panel)
-        sec_feat = SectionPanel("功能")
-        sec_feat.addWidget(feat_scroll)
-        v.addWidget(sec_feat)
+        sec = SectionPanel("功能")
+        sec.addWidget(feat_scroll)
+        sec.setFixedHeight(200)
+        return sec
 
-        # 5) 可折叠日志
-        self._log = CollapsibleLog()
-        v.addWidget(self._log)
+    def _build_log_section(self) -> SectionPanel:
+        self._log = LogPanel()
+        sec = SectionPanel("执行日志")
+        sec.addWidget(self._log)
+        sec.setFixedHeight(180)
+        return sec
 
-        shell.addWidget(right, 1)
-
-        if "douyin" in PlatformBus.list_platforms():
-            self._select_platform("douyin")
-
-    def _build_feature_panel(self) -> FeaturePanel:
+    def _build_feature_panel_inner(self) -> FeaturePanel:
         def _copy_work_link():
             w = self._video_info.work
             self._on_copy_link(w.get("share_url") or w.get("video_url", ""))
@@ -501,13 +534,10 @@ class MainWindow(QMainWindow):
             plat_lay.addWidget(btn)
             self._platform_btns.append((pid, btn))
 
-        sb.addStretch()
-
         tool_lay = self._side_group(sb, "工具")
         for text, slot in (
             ("设置",     self._open_settings),
             ("打开下载目录", self._open_download_dir),
-            ("执行日志", self._open_log),
             ("切换主题", self._toggle_theme),
         ):
             btn = QPushButton(text)
@@ -803,9 +833,6 @@ class MainWindow(QMainWindow):
             self._tabs.add_page("login", "账号登录", self._login_page)
         else:
             self._tabs.set_current("login")
-
-    def _open_log(self):
-        self._log.set_expanded(True)
 
     def _toggle_theme(self):
         app = QApplication.instance()
