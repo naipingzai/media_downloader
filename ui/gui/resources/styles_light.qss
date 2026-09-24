@@ -10,9 +10,40 @@ QStatusBar { background: #f1f5f9; color: #475569; }
 QSplitter::handle { background: #e2e8f0; }
 QSplitter::handle:horizontal { width: 6px; }
 
-/* ---------- 侧栏 ---------- */
+/* ---------- 顶部横排栏 (TopBar) ---------- */
+#TopBar {
+    background: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+}
+#BrandTitle {
+    color: #d97706; font-size: 18px; font-weight: bold;
+    background: transparent; border: none;
+}
+#TopSep { color: #cbd5e1; font-size: 16px; background: transparent; border: none; }
+#TopGroupLabel {
+    color: #64748b; font-size: 12px; font-weight: bold;
+    background: transparent; border: none; padding: 0 4px;
+}
+#TopPlatformBtn {
+    background: #ffffff; color: #334155;
+    border: 1px solid #cbd5e1; border-radius: 6px;
+    padding: 6px 14px; font-size: 14px; min-width: 60px;
+}
+#TopPlatformBtn:hover { background: #f1f5f9; border-color: #94a3b8; color: #0f172a; }
+#TopPlatformBtn[active="true"] {
+    background: #dbeafe; border-color: #2563eb; color: #2563eb; font-weight: bold;
+}
+#TopPlatformBtn:pressed { background: #bfdbfe; }
+#TopToolBtn {
+    background: #ffffff; color: #334155;
+    border: 1px solid #cbd5e1; border-radius: 6px;
+    padding: 6px 14px; font-size: 14px;
+}
+#TopToolBtn:hover { background: #f1f5f9; border-color: #94a3b8; color: #0f172a; }
+#TopToolBtn:pressed { background: #bfdbfe; color: #0f172a; }
+
+/* (旧版侧栏样式) */
 #Sidebar { background: #ffffff; border-right: 1px solid #e2e8f0; }
-#BrandTitle { color: #d97706; font-size: 18px; font-weight: bold; background: transparent; }
 #BrandSubtitle { color: #64748b; font-size: 12px; background: transparent; padding-left: 2px; }
 #VersionLabel { color: #64748b; font-size: 12px; padding-left: 4px; }
 #GroupTitle { color: #64748b; font-size: 12px; font-weight: bold; background: transparent; padding: 2px 4px; }

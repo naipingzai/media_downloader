@@ -348,50 +348,122 @@ class MainWindow(QMainWindow):
         self._login_page = LoginPage()
         self._login_page.cookie_changed.connect(self._refresh_cookie_status)
 
-    # ---------------- 主 UI (单一垂直列, 不再左右分栏) ----------------
+    # ---------------- 主 UI:
+    #   顶 部  : 品牌 + 平台切换 + 工具/账号 横排按钮
+    #   中 部  : 左 = 作者 + 作品资料 (QTabWidget) , 右 = 功能按钮网格
+    #   底 部  : 执行日志 (固定高)
+    # ----------------
     def _setup_ui(self):
         central = QWidget()
         self.setCentralWidget(central)
-        shell = QHBoxLayout(central)
-        shell.setContentsMargins(0, 0, 0, 0)
-        shell.setSpacing(0)
+        v = QVBoxLayout(central)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
 
-        shell.addWidget(self._build_sidebar())
+        # 0) 顶部横排栏 (品牌 + 平台 + 工具 + 账号)
+        v.addWidget(self._build_topbar())
 
-        # 主区: 单一垂直布局
-        right = QWidget()
-        v = QVBoxLayout(right)
-        v.setContentsMargins(10, 10, 10, 8)
-        v.setSpacing(8)
+        # 1) 链接栏 (固定高)
+        v.addWidget(self._build_link_panel())
 
-        # ---- 各区域固定高度, 不允许拉伸 (位置全部锁定) ----
-
-        # 1) 链接栏 (固定高 56)
-        sec_link = self._build_link_panel()
-        v.addWidget(sec_link)
-
-        # 2) 作者资料卡 (固定高 140)
+        # 2) 中部左右两栏 (主体)
+        body = QWidget()
+        body_lay = QHBoxLayout(body)
+        body_lay.setContentsMargins(10, 10, 10, 4)
+        body_lay.setSpacing(10)
+        # 左: 作者 + 作品资料 (垂直)
+        left_col = QWidget()
+        left_v = QVBoxLayout(left_col)
+        left_v.setContentsMargins(0, 0, 0, 0)
+        left_v.setSpacing(10)
+        # 2.1 作者资料 (固定高)
         sec_author = self._build_author_panel()
-        v.addWidget(sec_author)
-
-        # 3) 作品资料区 (多页内嵌) —— 固定高, 不随窗口伸缩
+        left_v.addWidget(sec_author)
+        # 2.2 作品资料 (占左侧主要空间)
         sec_video = self._build_video_panel()
-        v.addWidget(sec_video, 1)        # 占剩余空间 (动态区域)
+        left_v.addWidget(sec_video, 1)
+        body_lay.addWidget(left_col, 3)   # 左侧权重 3
+        # 右: 功能按钮网格 (固定高)
+        right_col = self._build_right_column()
+        body_lay.addWidget(right_col, 2) # 右侧权重 2
+        v.addWidget(body, 1)
 
-        # 4) 功能面板 (固定高 200)
-        sec_feat = self._build_feature_section()
-        v.addWidget(sec_feat)
-
-        # 5) 静态日志条 (固定高 140, 不可展开)
-        sec_log = self._build_log_section()
-        v.addWidget(sec_log)
-
-        shell.addWidget(right)
+        # 3) 底部: 日志 (固定高)
+        v.addWidget(self._build_log_section())
 
         if "douyin" in PlatformBus.list_platforms():
             self._select_platform("douyin")
 
     # ---------------- 各区域 (固定高度构造) ----------------
+
+    # ---- 顶部横排栏 ----
+    def _build_topbar(self) -> QFrame:
+        """顶部横排: 品牌 | 平台按钮组 | 工具按钮 | 账号按钮。"""
+        bar = QFrame()
+        bar.setObjectName("TopBar")
+        bar.setFixedHeight(56)
+        bar.setStyleSheet(
+            "#TopBar { background: #0f172a;"
+            " border-bottom: 1px solid #334155; }")
+        row = QHBoxLayout(bar)
+        row.setContentsMargins(14, 8, 14, 8)
+        row.setSpacing(12)
+
+        # 品牌
+        brand = QLabel("MediaDownloader")
+        brand.setObjectName("BrandTitle")
+        row.addWidget(brand)
+
+        # 分隔点
+        sep = QLabel("·")
+        sep.setObjectName("TopSep")
+        row.addWidget(sep)
+
+        # 平台按钮组 (横排)
+        plat_label = QLabel("平台")
+        plat_label.setObjectName("TopGroupLabel")
+        row.addWidget(plat_label)
+        self._platform_btns = []
+        plat_row = QHBoxLayout()
+        plat_row.setContentsMargins(0, 0, 0, 0)
+        plat_row.setSpacing(6)
+        for pid in PlatformBus.list_platforms():
+            btn = QPushButton(_pn(pid))
+            btn.setObjectName("TopPlatformBtn")
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.clicked.connect(lambda checked, p=pid: self._select_platform(p))
+            plat_row.addWidget(btn)
+            self._platform_btns.append((pid, btn))
+        plat_wrap = QWidget()
+        plat_wrap.setLayout(plat_row)
+        row.addWidget(plat_wrap)
+
+        # 拉伸弹簧 (把后面的按钮推到右侧)
+        row.addStretch()
+
+        # 工具 + 账号 (横排)
+        def add_icon_button(text, slot):
+            b = QPushButton(text)
+            b.setObjectName("TopToolBtn")
+            b.setCursor(Qt.PointingHandCursor)
+            b.clicked.connect(slot)
+            row.addWidget(b)
+            return b
+        add_icon_button("设置", self._open_settings)
+        self._theme_btn = add_icon_button("暗色", self._toggle_theme)
+        add_icon_button("登录", self._open_login)
+        add_icon_button("下载目录", self._open_download_dir)
+        return bar
+
+    # ---- 右侧功能按钮列 ----
+    def _build_right_column(self) -> SectionPanel:
+        """右侧: 功能按钮区 (依赖 FeaturePanel · 网格布局)。"""
+        self._feature_panel = self._build_feature_panel_inner()
+        sec = SectionPanel("功能")
+        sec.addWidget(self._feature_panel)
+        sec.setMinimumHeight(400)
+        return sec
+
     def _build_link_panel(self) -> SectionPanel:
         link_bar = QFrame()
         link_bar.setObjectName("LinkBar")
@@ -437,17 +509,6 @@ class MainWindow(QMainWindow):
         sec = SectionPanel("作品资料")
         sec.addWidget(self._tabs)
         sec.setFixedHeight(400)        # 标题 + 4px padding + 内容
-        return sec
-
-    def _build_feature_section(self) -> SectionPanel:
-        self._feature_panel = self._build_feature_panel_inner()
-        feat_scroll = QScrollArea()
-        feat_scroll.setWidgetResizable(True)
-        feat_scroll.setFrameShape(QScrollArea.NoFrame)
-        feat_scroll.setWidget(self._feature_panel)
-        sec = SectionPanel("功能")
-        sec.addWidget(feat_scroll)
-        sec.setFixedHeight(200)
         return sec
 
     def _build_log_section(self) -> SectionPanel:
@@ -507,59 +568,7 @@ class MainWindow(QMainWindow):
         self._current_worker = None
         return fp
 
-    # ---------------- 侧栏 (每行加框) ----------------
-    def _build_sidebar(self) -> QFrame:
-        sidebar = QFrame()
-        sidebar.setObjectName("Sidebar")
-        sidebar.setFixedWidth(220)
-        sb = QVBoxLayout(sidebar)
-        sb.setContentsMargins(12, 12, 12, 12)
-        sb.setSpacing(10)
-
-        brand_title = QLabel("MediaDownloader")
-        brand_title.setObjectName("BrandTitle")
-        sb.addWidget(brand_title)
-        brand_caption = QLabel("多平台媒体下载")
-        brand_caption.setObjectName("BrandSubtitle")
-        sb.addWidget(brand_caption)
-
-        plat_lay = self._side_group(sb, "平台")
-        self._platform_btns = []
-        for pid in PlatformBus.list_platforms():
-            label = _pn(pid)
-            btn = QPushButton(label)
-            btn.setObjectName("SidebarButton")
-            btn.setCursor(Qt.PointingHandCursor)
-            btn.clicked.connect(lambda checked, p=pid: self._select_platform(p))
-            plat_lay.addWidget(btn)
-            self._platform_btns.append((pid, btn))
-
-        tool_lay = self._side_group(sb, "工具")
-        for text, slot in (
-            ("设置",     self._open_settings),
-            ("打开下载目录", self._open_download_dir),
-            ("切换主题", self._toggle_theme),
-        ):
-            btn = QPushButton(text)
-            btn.setObjectName("SidebarButton")
-            btn.setCursor(Qt.PointingHandCursor)
-            btn.clicked.connect(slot)
-            tool_lay.addWidget(btn)
-        self._theme_btn = tool_lay.itemAt(tool_lay.count() - 1).widget()
-
-        acc_lay = self._side_group(sb, "账号")
-        login_btn = QPushButton("登录 / Cookie")
-        login_btn.setObjectName("SidebarButton")
-        login_btn.setCursor(Qt.PointingHandCursor)
-        login_btn.clicked.connect(self._open_login)
-        acc_lay.addWidget(login_btn)
-
-        sb.addSpacing(4)
-        version_label = QLabel(f"v{__VERSION__}")
-        version_label.setObjectName("VersionLabel")
-        sb.addWidget(version_label)
-        return sidebar
-
+    # (旧版侧栏已由顶部横排 TopBar 替代, 这里保留 _side_group 仅供历史参考)
     _GROUP_STYLE = (
         "QFrame#SideGroup { background: #1e293b;"
         " border: 1px solid #334155; border-radius: 8px; }")
