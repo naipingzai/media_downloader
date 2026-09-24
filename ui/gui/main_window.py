@@ -350,8 +350,10 @@ class MainWindow(QMainWindow):
 
     # ---------------- 主 UI:
     #   顶 部  : 品牌 + 平台切换 + 工具/账号 横排按钮
-    #   中 部  : 左 = 作者 + 作品资料 (QTabWidget) , 右 = 功能按钮网格
-    #   底 部  : 执行日志 (固定高)
+    #   中 部  : 左 = 作者 + 作品资料 (QTabWidget)     (大)
+    #            右 = 功能窗口                            (小, 上下分割)
+    #                 ├─ 上: 链接输入 + 功能按钮
+    #                 └─ 下: 执行日志 (支持复制粘贴)
     # ----------------
     def _setup_ui(self):
         central = QWidget()
@@ -363,33 +365,38 @@ class MainWindow(QMainWindow):
         # 0) 顶部横排栏 (品牌 + 平台 + 工具 + 账号)
         v.addWidget(self._build_topbar())
 
-        # 1) 链接栏 (固定高)
-        v.addWidget(self._build_link_panel())
-
-        # 2) 中部左右两栏 (主体)
+        # 1) 中部左右两栏 (主体)
         body = QWidget()
         body_lay = QHBoxLayout(body)
-        body_lay.setContentsMargins(10, 10, 10, 4)
+        body_lay.setContentsMargins(10, 10, 10, 8)
         body_lay.setSpacing(10)
-        # 左: 作者 + 作品资料 (垂直)
+        # === 左: 作者 + 作品资料 (一个垂直容器) ===
         left_col = QWidget()
         left_v = QVBoxLayout(left_col)
         left_v.setContentsMargins(0, 0, 0, 0)
         left_v.setSpacing(10)
-        # 2.1 作者资料 (固定高)
+        # 作者资料
         sec_author = self._build_author_panel()
         left_v.addWidget(sec_author)
-        # 2.2 作品资料 (占左侧主要空间)
+        # 作品资料
         sec_video = self._build_video_panel()
         left_v.addWidget(sec_video, 1)
-        body_lay.addWidget(left_col, 3)   # 左侧权重 3
-        # 右: 功能按钮网格 (固定高)
-        right_col = self._build_right_column()
-        body_lay.addWidget(right_col, 2) # 右侧权重 2
+        body_lay.addWidget(left_col, 3)   # 左大 3
+        # === 右: 功能 + 日志 (垂直, 上下分割) ===
+        right_col = QWidget()
+        right_v = QVBoxLayout(right_col)
+        right_v.setContentsMargins(0, 0, 0, 0)
+        right_v.setSpacing(10)
+        # 上: 链接输入 + 功能按钮
+        sec_link = self._build_link_panel()
+        right_v.addWidget(sec_link)
+        sec_feat = self._build_right_column()
+        right_v.addWidget(sec_feat, 1)
+        # 下: 日志 (支持复制粘贴)
+        sec_log = self._build_log_section()
+        right_v.addWidget(sec_log)
+        body_lay.addWidget(right_col, 2)  # 右小 2
         v.addWidget(body, 1)
-
-        # 3) 底部: 日志 (固定高)
-        v.addWidget(self._build_log_section())
 
         if "douyin" in PlatformBus.list_platforms():
             self._select_platform("douyin")

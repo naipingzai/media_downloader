@@ -28,10 +28,14 @@ class LogPanel(QFrame):
         hdr.addWidget(clear_btn)
         v.addLayout(hdr)
         self._log = QTextEdit()
-        self._log.setReadOnly(True)
+        # 允许复制/粘贴/全选 (用户可拖选复制, Ctrl+C/V)
+        self._log.setReadOnly(False)        # 非只读 · 支持 Ctrl+C / Ctrl+V / Ctrl+A
+        # 但监听外部系统节流 (避免第三方误改)
         self._log.setStyleSheet(
             "QTextEdit { background: transparent; color: #e2e8f0;"
-            " font-family: monospace; font-size: 14px; border: none; }")
+            " font-family: monospace; font-size: 14px; border: none;"
+            " selection-background-color: #475569;"
+            " selection-color: #ffffff; }")
         v.addWidget(self._log)
 
     # ===== 公开 API =====
