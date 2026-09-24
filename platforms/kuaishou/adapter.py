@@ -83,3 +83,125 @@ class KuaishouAdapter(PlatformAdapter):
         return videos[:max_count]
 
     async def close(self): pass
+
+    # ===== 统一扩展接口 =====
+    async def fetch_user_posts(self, sec_uid: str, count: int = 20, max_cursor: str = "0"):
+        from shared.core.adapter import norm_work
+        videos = await self.fetch_user_videos(sec_uid, max_count=max(count, 30))
+        return [norm_work(v, "kuaishou") for v in videos]
+
+    async def fetch_current_user(self):
+        """获取当前登录快手用户 (从 /rest/v/profile/info 拉取)。"""
+        from shared.core.adapter import norm_user
+        try:
+            from curl_cffi.requests import AsyncSession
+            h = PARAMS_HEADERS.copy()
+            h["Cookie"] = self.cookie
+            h["Referer"] = "https://www.kuaishou.com"
+            async with AsyncSession(impersonate=IMPERSONATE) as c:
+                r = await c.get("https://www.kuaishou.com/rest/v/profile/info",
+                                headers=h, proxy=self.proxy, timeout=10)
+                if r.status_code != 200:
+                    return None
+                d = r.json().get("data") or {}
+                if not d:
+                    return None
+                return norm_user({
+                    "userId": d.get("userId") or d.get("principalId", ""),
+                    "nickname": d.get("userName") or d.get("nickname", ""),
+                    "avatar": d.get("headUrl") or d.get("avatar", ""),
+                    "signature": d.get("userText") or "",
+                    "follower_count": d.get("fansCount", 0),
+                    "following_count": d.get("followCount", 0),
+                    "aweme_count": d.get("photoCount", 0),
+                }, "kuaishou")
+        except Exception:
+            return None
+
+    async def fetch_user_profile(self, sec_uid: str):
+        """拉取作者资料 (从 /rest/v/profile/otherInfo 拉取)。"""
+        from shared.core.adapter import norm_user
+        try:
+            from curl_cffi.requests import AsyncSession
+            h = PARAMS_HEADERS.copy()
+            h["Cookie"] = self.cookie
+            h["Referer"] = "https://www.kuaishou.com"
+            async with AsyncSession(impersonate=IMPERSONATE) as c:
+                r = await c.get("https://www.kuaishou.com/rest/v/profile/otherInfo",
+                                params={"principalId": sec_uid},
+                                headers=h, proxy=self.proxy, timeout=10)
+                if r.status_code != 200:
+                    return norm_user({"userId": sec_uid, "nickname": sec_uid,
+                                      "platform": "kuaishou"}, "kuaishou")
+                d = r.json().get("data") or {}
+                return norm_user({
+                    "userId": d.get("userId") or sec_uid,
+                    "nickname": d.get("userName") or d.get("nickname", sec_uid),
+                    "avatar": d.get("headUrl") or d.get("avatar", ""),
+                    "signature": d.get("userText") or "",
+                    "follower_count": d.get("fansCount", 0),
+                    "following_count": d.get("followCount", 0),
+                    "aweme_count": d.get("photoCount", 0),
+                }, "kuaishou")
+        except Exception:
+            return norm_user({"userId": sec_uid, "nickname": sec_uid,
+                              "platform": "kuaishou"}, "kuaishou")
+
+    async def fetch_collection(self, cursor: str = "0", count: int = 20):
+        """拉取收藏作品 (从 /rest/v/feed/collection 获取)。"""
+        from shared.core.adapter import norm_work
+        try:
+            from curl_cffi.requests import AsyncSession
+            h = PARAMS_HEADERS.copy()
+            h["Cookie"] = self.cookie
+            h["Referer"] = "https://www.kuaishou.com"
+            async with AsyncSession(impersonate=IMPERSONATE) as c:
+                pcursor = cursor or ""
+                items = []
+                while len(items) < count:
+                    r = await c.get("https://www.kuaishou.com/rest/v/feed/collection",
+                                    params={"pcursor": pcursor},
+                                    headers=h, proxy=self.proxy, timeout=10)
+                    if r.status_code != 200:
+                        break
+                    data = r.json().get("data") or {}
+                    feeds = data.get("list") or []
+                    if not feeds:
+                        break
+                    items.extend(feeds)
+                    pcursor = data.get("pcursor", "")
+                    if not pcursor or pcursor == "no_more":
+                        break
+                return [norm_work(w, "kuaishou") for w in items[:count]]
+        except Exception:
+            return None
+
+    async def fetch_user_following(self, sec_uid: str, count: int = 20, max_time: str = "0"):
+        """拉取关注列表 (从 /rest/v/relation/following 获取)。"""
+        from shared.core.adapter import norm_user
+        try:
+            from curl_cffi.requests import AsyncSession
+            h = PARAMS_HEADERS.copy()
+            h["Cookie"] = self.cookie
+            h["Referer"] = "https://www.kuaishou.com"
+            users, pcursor = [], ""
+            async with AsyncSession(impersonate=IMPERSONATE) as c:
+                while len(users) < count:
+                    r = await c.get("https://www.kuaishou.com/rest/v/relation/following",
+                                    params={"principalId": sec_uid, "pcursor": pcursor},
+                                    headers=h, proxy=self.proxy, timeout=10)
+                    if r.status_code != 200:
+                        break
+                    data = r.json().get("data") or {}
+                    lst = data.get("list") or []
+                    if not lst:
+                        break
+                    for u in lst:
+                        users.append(norm_user(u, "kuaishou"))
+                    pcursor = data.get("pcursor", "")
+                    if not pcursor or pcursor == "no_more":
+                        break
+                return {"followings": users[:count], "has_more": False} if users else None
+        except Exception:
+            return None
+

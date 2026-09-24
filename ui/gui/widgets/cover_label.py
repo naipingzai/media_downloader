@@ -7,7 +7,7 @@ __all__ = ["CoverLabel"]
 
 PLACEHOLDER_STYLE = (
     "background: #0f172a; color: #475569; border: 1px solid #334155;"
-    " border-radius: 6px; font-size: 12px;")
+    " border-radius: 6px; font-size: 14px;")
 LOADED_STYLE = "background: #0f172a; border-radius: 6px;"
 
 

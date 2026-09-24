@@ -10,12 +10,13 @@ class BilibiliOps(PlatformOps):
     cookie_hint = "需要 SESSDATA Cookie（从浏览器 DevTools 复制）"
 
     features = [
-        FeatureMeta("download",   "下载单个视频",       True),
-        FeatureMeta("account",    "批量下载用户作品",   True),
-        FeatureMeta("series",     "批量下载合集/系列",  True),
-        FeatureMeta("collection", "批量下载收藏夹",     True),
-        FeatureMeta("comment",    "采集视频评论",       True),
-        FeatureMeta("user",       "采集用户资料",       True),
+        FeatureMeta("download",        "下载单个视频",       True),
+        FeatureMeta("account",         "批量下载用户作品",   True),
+        FeatureMeta("series",          "批量下载合集/系列",  True),
+        FeatureMeta("collection",      "下载默认收藏夹",     False),
+        FeatureMeta("favorite_folders","列出所有收藏夹",     False),
+        FeatureMeta("comment",         "采集视频评论",       True),
+        FeatureMeta("user",            "采集用户资料",       True),
     ]
 
     async def _get_adapter(self, cookie: str):
@@ -141,6 +142,25 @@ class BilibiliOps(PlatformOps):
             log = [f"收藏夹 {fid}: {len(media_list)} 个作品"]
             return await self._batch_download(adapter, media_list, storage, log,
                                               selected=selected)
+        finally:
+            await adapter.close()
+
+    async def _do_favorite_folders(self, url, cookie, save_dir) -> FeatureResult:
+        """列出当前用户所有收藏夹 (仅查列表, 不下载)。"""
+        adapter = await self._get_adapter(cookie)
+        try:
+            folders = await adapter.fetch_favorite_folders()
+            if not folders:
+                return FeatureResult(False,
+                    "未拉到收藏夹 (可能未登录 / SESSDATA 失效)",
+                    log=["提示: 请先在设置里登录账号"])
+            log = [f"共 {len(folders)} 个收藏夹:"]
+            for f in folders:
+                log.append(f"  [{f['id']}] {f['title']} ({f['media_count']} 个)")
+            data = [[f["id"], f["title"], f["media_count"]] for f in folders]
+            return FeatureResult(True,
+                f"列出 {len(folders)} 个收藏夹 (使用 URL ?fid=<id> 下载指定收藏夹)",
+                log=log, data=data)
         finally:
             await adapter.close()
 

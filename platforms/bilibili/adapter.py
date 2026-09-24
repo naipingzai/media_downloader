@@ -349,7 +349,7 @@ class BilibiliAdapter(PlatformAdapter):
         except Exception:
             return []
 
-    async def fetch_comments(self, bvid: str, cid: int, max_count: int = 50) -> list[dict]:
+    async def _fetch_comments_raw(self, bvid: str, cid: int, max_count: int = 50) -> list[dict]:
         """采集视频评论。"""
         try:
             from curl_cffi.requests import AsyncSession
@@ -430,3 +430,165 @@ class BilibiliAdapter(PlatformAdapter):
                 }
         except Exception:
             return {}
+
+    # ===== 统一扩展接口 =====
+    async def fetch_current_user(self):
+        """获取当前登录用户 (Cookie 作者信息)。"""
+        from shared.core.adapter import norm_user
+        try:
+            from curl_cffi.requests import AsyncSession
+            async with AsyncSession(impersonate=IMPERSONATE) as c:
+                r = await c.get(NAV_URL, headers=self._headers(), proxy=self.proxy)
+                if r.status_code != 200:
+                    return None
+                d = self._sj(r).get("data") or {}
+                if not d.get("isLogin"):
+                    return None
+                return norm_user({
+                    "mid": d.get("mid", ""), "uname": d.get("uname", ""),
+                    "face": d.get("face", ""), "sign": "",
+                }, "bilibili")
+        except Exception:
+            return None
+
+    async def fetch_user_profile(self, sec_uid: str):
+        """获取作者资料 (统一归一化)。"""
+        from shared.core.adapter import norm_user
+        info = await self.fetch_user_info(sec_uid)
+        return norm_user({
+            "mid": sec_uid, "name": info.get("name", ""),
+            "fans": info.get("fans", 0), "attention": info.get("following", 0),
+            "sign": info.get("sign", ""),
+        }, "bilibili") if info else None
+
+    async def fetch_user_posts(self, sec_uid: str, count: int = 20, max_cursor: str = "0"):
+        """获取作者所有作品 (统一归一化, 一次性返回)。"""
+        from shared.core.adapter import norm_work
+        videos = await self.fetch_user_videos(sec_uid, max_count=max(count, 30))
+        return [norm_work(v, "bilibili") for v in videos]
+
+    async def fetch_user_following(self, sec_uid: str, count: int = 20, max_time: str = "0"):
+        """获取关注列表 (B站 API 需登录, 暂不支持)。"""
+        return None
+
+    async def fetch_collection(self, cursor: str = "0", count: int = 20):
+        """获取收藏作品 (统一归一化)。"""
+        from shared.core.adapter import norm_work
+        try:
+            items = await self.fetch_favorite_list(fid="0")
+            return [norm_work(v, "bilibili") for v in items]
+        except Exception:
+            return None
+
+    async def fetch_comments(self, work_id: str, *args, **kwargs):
+        """获取作品评论 (统一归一化, 兼容单参/多参)。"""
+        from shared.core.adapter import norm_comment
+        try:
+            cid = await self.fetch_cid(work_id)
+            if not cid:
+                return []
+            raw = await self._fetch_comments_raw(work_id, cid)
+            return [norm_comment(c) for c in (raw or [])]
+        except Exception:
+            return []
+
+    # ===== 统一扩展接口 (归一化) =====
+    async def fetch_current_user(self):
+        from shared.core.adapter import norm_user
+        try:
+            from curl_cffi.requests import AsyncSession
+            async with AsyncSession(impersonate=IMPERSONATE) as c:
+                r = await c.get(NAV_URL, headers=self._headers(), proxy=self.proxy)
+                if r.status_code != 200:
+                    return None
+                d = self._sj(r).get("data") or {}
+                if not d.get("isLogin"):
+                    return None
+                return norm_user({"mid": d.get("mid", ""), "uname": d.get("uname", ""),
+                                  "face": d.get("face", "")}, "bilibili")
+        except Exception:
+            return None
+
+    async def fetch_user_profile(self, sec_uid: str):
+        from shared.core.adapter import norm_user
+        try:
+            card = await self.fetch_user_info(sec_uid)
+            return norm_user({"mid": sec_uid, "uname": card.get("name", ""),
+                              "fans": card.get("fans", 0)}, "bilibili") if card else None
+        except Exception:
+            return None
+
+    async def fetch_user_posts(self, sec_uid: str, count: int = 20,
+                               max_cursor: str = "0") -> list:
+        from shared.core.adapter import norm_work
+        try:
+            items = await self.fetch_user_videos(sec_uid, max_count=max(count, 30))
+            return [norm_work(v, "bilibili") for v in items]
+        except Exception:
+            return []
+
+    async def fetch_user_following(self, sec_uid: str, count: int = 20,
+                                   max_time: str = "0"):
+        """获取关注列表 (B站 API, 需登录 Cookie)。"""
+        from shared.core.adapter import norm_user
+        try:
+            from curl_cffi.requests import AsyncSession
+            users, pn = [], 1
+            async with AsyncSession(impersonate=IMPERSONATE) as c:
+                while pn <= 3:
+                    r = await c.get(
+                        "https://api.bilibili.com/x/relation/followings",
+                        params={"vmid": sec_uid, "pn": pn, "ps": 20},
+                        headers=self._headers(), proxy=self.proxy)
+                    if r.status_code != 200:
+                        break
+                    lst = (self._sj(r).get("data") or {}).get("list") or []
+                    if not lst:
+                        break
+                    users.extend(norm_user(u, "bilibili") for u in lst)
+                    pn += 1
+            return {"followings": users, "has_more": False} if users else None
+        except Exception:
+            return None
+
+    async def fetch_collection(self, cursor: str = "0", count: int = 20) -> list:
+        from shared.core.adapter import norm_work
+        try:
+            items = await self.fetch_favorite_list(fid="0")
+            return [norm_work(v, "bilibili") for v in items]
+        except Exception:
+            return []
+
+    async def fetch_favorite_folders(self) -> list[dict]:
+        """列出当前用户的所有收藏夹 (id / title / media_count)。"""
+        try:
+            from curl_cffi.requests import AsyncSession
+            async with AsyncSession(impersonate=IMPERSONATE) as c:
+                await self._ensure_wbi(c)
+                h = self._headers()
+                params = {"up_mid": ""}
+                if self._img_key and self._sub_key:
+                    params = _wbi_sign(params, self._img_key, self._sub_key)
+                r = await c.get(f"{BASE_URL}/x/v3/fav/folder/created/list-all",
+                                 params=params, headers=h, proxy=self.proxy)
+                if r.status_code != 200:
+                    return []
+                folders = self._jget(self._sj(r), "data", "list") or []
+                return [{
+                    "id": str(f.get("id", "")),
+                    "title": f.get("title", ""),
+                    "media_count": f.get("media_count", 0),
+                    "cover": f.get("cover", ""),
+                } for f in folders if isinstance(f, dict)]
+        except Exception:
+            return []
+
+    async def fetch_collection_by_folder(self, fid: str, cursor: str = "0",
+                                          count: int = 20) -> list:
+        """按收藏夹 fid 拉取作品。cursor 仅用于内部传递。"""
+        from shared.core.adapter import norm_work
+        try:
+            items = await self.fetch_favorite_list(fid=fid)
+            return [norm_work(v, "bilibili") for v in items]
+        except Exception:
+            return []

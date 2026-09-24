@@ -23,7 +23,6 @@ class DouyinOps(PlatformOps):
         FeatureMeta("comment",    "采集作品评论数据",   True),
         FeatureMeta("user",       "采集账号详细数据",   True),
         FeatureMeta("search",     "采集搜索结果数据",   True),
-        FeatureMeta("hot",        "采集抖音热榜数据",   False),
     ]
 
     async def _get_adapter(self, cookie: str):
@@ -134,7 +133,13 @@ class DouyinOps(PlatformOps):
         try:
             mix_id = self._extract_mix_id(url)
             if not mix_id:
-                return FeatureResult(False, "无法提取合集 ID，请输入合集链接")
+                # 作品链接 → 从详情回退提取所在合集 ID
+                mix_id = await self._resolve_mix_id(adapter, url)
+            if not mix_id:
+                return FeatureResult(
+                    False,
+                    "无法提取合集 ID。请输入合集链接, 或该合集内任意一个作品的链接"
+                    "（将自动定位所在合集）; 该作品也可能不属于任何合集")
             aweme_list = self._cache_get(f"dy_mix:{mix_id}")
             if aweme_list is None:
                 aweme_list = await self._fetch_mix_awemes(adapter, mix_id)
@@ -200,8 +205,11 @@ class DouyinOps(PlatformOps):
         adapter = await self._get_adapter(cookie)
         storage = ConfigManager.get_storage_ops("douyin")
         try:
-            # 指定了单个专辑 → 直接按合集处理
+            # 指定了单个专辑 → 直接按合集处理 (合集链接 或 合集内作品链接)
             direct_mix = self._extract_mix_id(url) if url.strip() else ""
+            if not direct_mix and url.strip():
+                # 作品链接 → 从详情回退提取所在合集 ID
+                direct_mix = await self._resolve_mix_id(adapter, url)
             if direct_mix:
                 aweme_list = await self._fetch_mix_awemes(adapter, direct_mix)
                 if not aweme_list:
@@ -269,12 +277,29 @@ class DouyinOps(PlatformOps):
             if not folder_id:
                 # 没指定收藏夹 → 列出所有收藏夹
                 folders, cursor = [], "0"
+                last_debug = ""
                 for _ in range(10):
                     data = await adapter.fetch_favorite_folder_list(cursor=cursor, count=20)
                     if not data:
+                        last_debug = "接口无响应 (None)"
                         break
-                    flist = data.get("folder_list") or data.get("aweme_list") or []
+                    if not isinstance(data, dict):
+                        last_debug = f"响应类型异常: {type(data).__name__}"
+                        break
+                    sc = data.get("status_code", 0)
+                    if sc != 0:
+                        last_debug = (f"接口错误 status_code={sc}"
+                                      f" status_msg={data.get('status_msg', '')!r}")
+                        break
+                    # 兼容多种返回字段名
+                    inner = data.get("data") if isinstance(data.get("data"), dict) else {}
+                    flist = (data.get("folder_list")
+                             or data.get("folders")
+                             or inner.get("folder_list")
+                             or inner.get("folders")
+                             or data.get("aweme_list") or [])
                     if not flist:
+                        last_debug = f"响应无收藏夹字段 (keys={list(data.keys())[:8]})"
                         break
                     folders.extend(flist)
                     if not data.get("has_more"):
@@ -283,7 +308,12 @@ class DouyinOps(PlatformOps):
                     if cursor == "0":
                         break
                 if not folders:
-                    return FeatureResult(False, "未找到收藏夹（Cookie 可能已失效）")
+                    hint = f"（诊断: {last_debug}）" if last_debug else ""
+                    return FeatureResult(
+                        False,
+                        f"未找到收藏夹{hint}。请确认 Cookie 已登录且账号建过收藏夹；"
+                        f"若要下载「收藏」的作品请改用「批量下载收藏视频」",
+                        log=[f"favorite_folder/list 调试: {last_debug or 'ok'}"])
                 log = ["收藏夹列表:"]
                 items = []
                 for f in folders:
@@ -557,19 +587,6 @@ class DouyinOps(PlatformOps):
         finally:
             await adapter.close()
 
-    async def _do_hot(self, url, cookie, save_dir) -> FeatureResult:
-        adapter = await self._get_adapter(cookie)
-        storage = ConfigManager.get_storage_ops("douyin")
-        try:
-            results = await adapter.fetch_hot_list()
-            if not results:
-                return FeatureResult(False, "热榜数据为空")
-            await storage.save_data(results, "hot_list")
-            log = [f"#{it['rank']} {it['word']} ({it['hot_value']})" for it in results]
-            return FeatureResult(True, f"获取到 {len(results)} 条热榜", data=results, log=log)
-        finally:
-            await adapter.close()
-
     async def _batch_download(self, adapter, aweme_list, storage,
                               selected=None, preview_items=None, log=None):
         """批量下载入口。selected=None → 第一阶段只返回预览；否则下载勾选项。"""
@@ -656,18 +673,35 @@ class DouyinOps(PlatformOps):
 
     @staticmethod
     def _extract_mix_id(url: str) -> str:
-        """从合集链接/纯 ID 提取 mix_id。"""
+        """从合集链接提取 mix_id (仅认显式合集标记, 防止把作品ID误判为合集ID)。"""
         url = (url or "").strip()
         if not url:
             return ""
         if "mix_id=" in url:
             return url.split("mix_id=")[-1].split("&")[0].split("?")[0]
-        s = url.rstrip("/").split("/")[-1].split("?")[0]
-        if s.isdigit():
-            return s
         from re import search
-        m = search(r"mix/(\d+)", url)
+        m = search(r"/mix/(\d+)", url) or search(r"/collection/(\d+)", url)
         return m.group(1) if m else ""
+
+    async def _resolve_mix_id(self, adapter, url: str) -> str:
+        """作品链接 → 解析详情 → 提取其所在合集的 mix_id。"""
+        from shared.flow.link import LinkExtractor
+        from shared.core.session import create_async_client
+        # ① 先从详情字段直接拿 (若上游已解析过)
+        client = create_async_client()
+        try:
+            links = await LinkExtractor(client).run(url, "douyin")
+        finally:
+            await client.close()
+        if not links:
+            return ""
+        raw = await adapter.request_detail(links[0])
+        if not raw:
+            return ""
+        work = adapter.parse_detail(raw)
+        if work:
+            return str(work.get("mix_id") or "")
+        return ""
 
     async def _fetch_mix_awemes(self, adapter, mix_id: str, max_pages: int = 50) -> list:
         """分页抓取单个合集的全部作品。"""

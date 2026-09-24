@@ -28,8 +28,8 @@ def get_pyinstaller_cmd():
     sep = ";" if is_win else ":"
     ffmpeg_name = "ffmpeg.exe" if is_win else "ffmpeg"
     ffmpeg_path = BUILD_DIR / ffmpeg_name
-    qss_path = ROOT / "ui" / "gui" / "resources" / "styles.qss"
     check_svg = ROOT / "static" / "checkbox_check.svg"
+    qss_dir = ROOT / "ui" / "gui" / "resources"
 
     cmd = [
         sys.executable, "-m", "PyInstaller",
@@ -40,7 +40,8 @@ def get_pyinstaller_cmd():
         "--clean",
         "--additional-hooks-dir", str(ROOT / "hooks"),
         f"--add-data", f"{ffmpeg_path}{sep}.",
-        f"--add-data", f"{qss_path}{sep}ui/gui/resources",
+        # Bundle QSS 主题文件 (运行时由 theme.py 从 ui/gui/resources 读取)
+        f"--add-data", f"{qss_dir}{sep}ui/gui/resources",
         f"--add-data", f"{check_svg}{sep}static",
         # Core dependencies
         "--hidden-import", "curl_cffi",
@@ -90,9 +91,12 @@ def get_pyinstaller_cmd():
         "--hidden-import", "ui.gui.cover_loader",
         "--hidden-import", "ui.gui.widgets",
         "--hidden-import", "ui.gui.widgets.cover_label",
-        "--hidden-import", "ui.gui.widgets.work_card",
-        "--hidden-import", "ui.gui.widgets.video_info",
-        "--hidden-import", "ui.gui.widgets.batch_preview",
+        "--hidden-import", "ui.gui.widgets.display_area",
+        "--hidden-import", "ui.gui.pages.work_grid_page",
+        "--hidden-import", "ui.gui.pages.users_page",
+        "--hidden-import", "ui.gui.pages.data_table_page",
+        "--hidden-import", "ui.gui.pages.login_page",
+        "--hidden-import", "ui.gui.pages.settings_page",
         str(ROOT / "main.py"),
     ]
     return cmd

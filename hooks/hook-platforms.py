@@ -1,12 +1,11 @@
 """PyInstaller hook: 收集所有平台模块。"""
-from PyInstaller.utils.hooks import collect_submodules, collect_data_files
+from PyInstaller.utils.hooks import collect_submodules
 
 hiddenimports = (
-    collect_submodules('platforms') +
-    collect_submodules('shared.core') +
-    collect_submodules('shared.flow') +
-    collect_submodules('shared.translation') +
-    [
+    collect_submodules('platforms')
+    + collect_submodules('shared.core')
+    + collect_submodules('shared.flow')
+    + [
         'platforms.douyin.encrypt.douyin_params',
         'platforms.douyin.encrypt.websign',
         'shared.core.ops',

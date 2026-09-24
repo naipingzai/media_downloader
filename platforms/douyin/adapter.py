@@ -77,9 +77,13 @@ class DouyinAdapter(PlatformAdapter):
                     cover = urls[0]
                     break
         stat = aweme.get("statistics", {})
+        # 所在合集 ID (作品属于合集时存在)
+        mix_info = aweme.get("mix_info") or {}
+        mix_id = str(mix_info.get("mix_id") or "")
         return {
             "platform": "douyin", "work_id": aweme.get("aweme_id", ""),
             "title": aweme.get("desc", ""),
+            "mix_id": mix_id,
             "author_name": author.get("nickname", ""),
             "author_id": author.get("uid", ""),
             "sec_user_id": author.get("sec_uid", ""),
@@ -106,6 +110,9 @@ class DouyinAdapter(PlatformAdapter):
     # ---- user profile ----
     async def fetch_user_profile(self, sec_user_id: str) -> dict | None:
         return await self._signed_get("https://www.douyin.com/aweme/v1/web/user/profile/other/", {"sec_user_id": sec_user_id})
+    # ---- user following list (关注列表) ----
+    async def fetch_user_following(self, sec_user_id: str, count: int = 20, max_time: str = "0") -> dict | None:
+        return await self._signed_get("https://www.douyin.com/aweme/v1/web/user/follow/list/", {"sec_user_id": sec_user_id, "count": str(count), "max_time": max_time, "min_time": "0"})
 
     # ---- comments ----
     async def fetch_comments(self, aweme_id: str, cursor: int = 0, count: int = 20) -> dict | None:
@@ -226,3 +233,21 @@ class DouyinAdapter(PlatformAdapter):
             "platform": "PC", "downlink": "10", "effective_type": "4g",
             "round_trip_time": "200",
         }
+
+    # ===== 统一扩展接口 =====
+    async def fetch_current_user(self):
+        """获取当前登录用户 (Cookie 作者信息)。"""
+        from shared.core.adapter import norm_user
+        for url in ("https://www.douyin.com/aweme/v1/web/user/profile/self/",
+                    "https://www.douyin.com/passport/web/account/info/"):
+            resp = await self._signed_get(url, {})
+            if not isinstance(resp, dict) or resp.get("status_code", -1) != 0:
+                continue
+            u = resp.get("user") or resp.get("user_info") or {}
+            if not u:
+                inner = resp.get("data") or {}
+                if isinstance(inner, dict):
+                    u = inner.get("user") or inner.get("user_info") or inner
+            if u:
+                return norm_user(u, "douyin")
+        return None

@@ -1,0 +1,283 @@
+/* ============================================================
+   MediaDownloader — 暗色主题
+   ------------------------------------------------------------
+   - 侧栏: 每个分组 (平台/工具/账号) 都是带边框卡片, 按钮也在框内
+   - 展示区: 左侧列表带边框, 右侧内容栈
+   - 内嵌页: 统一的 PageCard / PageTitle 样式
+   ============================================================ */
+
+/* ---------- 全局 ---------- */
+QMainWindow { background: #0f172a; }
+QWidget { color: #e2e8f0; }
+QDialog { background: #0f172a; color: #e2e8f0; }
+QScrollArea { background: transparent; border: none; }
+QScrollArea > QWidget > QWidget { background: transparent; }
+QStatusBar { background: #1e293b; color: #94a3b8; }
+QSplitter::handle { background: #1e293b; }
+QSplitter::handle:horizontal { width: 6px; }
+
+/* ---------- 侧栏 ---------- */
+#Sidebar { background: #0f172a; border-right: 1px solid #334155; }
+#BrandTitle { color: #facc15; font-size: 18px; font-weight: bold; background: transparent; }
+#BrandSubtitle { color: #64748b; font-size: 12px; background: transparent; padding-left: 2px; }
+#VersionLabel { color: #64748b; font-size: 12px; padding-left: 4px; }
+#GroupTitle {
+    color: #94a3b8; font-size: 12px; font-weight: bold;
+    background: transparent; padding: 2px 4px;
+}
+
+/* 每个分组是带框卡片, 里面的按钮也是带框 (侧栏每行加框) */
+#SideGroup {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 8px;
+}
+#SidebarButton {
+    background: #0f172a;
+    color: #cbd5e1;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 14px;
+    text-align: left;
+}
+#SidebarButton:hover { background: #334155; border-color: #475569; color: #f1f5f9; }
+#SidebarButton[active="true"] {
+    background: #22314a;
+    border-color: #38bdf8;
+    color: #38bdf8;
+    font-weight: bold;
+}
+#SidebarButton:pressed { background: #1d4ed8; }
+
+/* ---------- 面板 (SectionPanel) ---------- */
+#SectionPanel {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 8px;
+}
+#SectionTitle {
+    color: #cbd5e1;
+    font-size: 14px;
+    font-weight: bold;
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+
+/* ---------- 链接栏 ---------- */
+#LinkInput {
+    background: #0f172a; color: #e2e8f0;
+    border: 1px solid #334155; border-radius: 6px;
+    padding: 8px 10px;
+}
+#LinkInput:focus { border-color: #3b82f6; }
+
+/* ---------- 按钮 (通用) ---------- */
+QPushButton {
+    background: #334155; color: #e2e8f0; border: none;
+    border-radius: 6px; padding: 7px 14px; font-size: 14px;
+}
+QPushButton:hover { background: #475569; }
+QPushButton:disabled { background: #1f2937; color: #64748b; }
+#PrimaryButton { background: #3b82f6; color: white; font-weight: bold; }
+#PrimaryButton:hover { background: #2563eb; }
+#PrimaryButton:disabled { background: #1f2937; color: #64748b; }
+
+/* ---------- 输入框 / 下拉 ---------- */
+QLineEdit, QComboBox, QSpinBox {
+    background: #0f172a; color: #e2e8f0;
+    border: 1px solid #475569; border-radius: 6px;
+    padding: 6px 10px;
+}
+QLineEdit:focus, QComboBox:focus { border-color: #3b82f6; }
+QComboBox::drop-down { border: none; width: 24px; }
+QComboBox::down-arrow {
+    image: none;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid #94a3b8;
+    margin-right: 8px;
+}
+QComboBox QAbstractItemView {
+    background: #1e293b; color: #e2e8f0;
+    border: 1px solid #475569;
+    selection-background-color: #334155;
+    padding: 4px 0;
+}
+QComboBox QAbstractItemView::item { padding: 6px 10px; min-height: 24px; }
+
+/* ---------- 状态栏 ---------- */
+#StatusLabel, #StatusPlatform, #StatusCookie, #StatusHint, #StatusFFmpeg {
+    background: transparent; border: none;
+    padding-left: 8px; padding-right: 4px;
+    font-size: 14px; color: #94a3b8;
+}
+#StatusCookie { font-weight: bold; }
+#StatusVersion {
+    background: rgba(250, 204, 21, 0.10);
+    color: #facc15;
+    padding: 0 12px; font-weight: bold;
+    border: none;
+    font-size: 14px;
+}
+
+/* ---------- 作品资料区 (EmbeddedTabs · QTabWidget) ---------- */
+#EmbeddedTabs {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 6px;
+}
+QTabWidget::pane {
+    border: 1px solid #334155;
+    background: #1e293b;
+    border-radius: 6px;
+    top: -1px;
+}
+QTabBar::tab {
+    background: #0f172a;
+    color: #94a3b8;
+    padding: 8px 18px 8px 14px;
+    border: 1px solid #334155;
+    border-bottom: none;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    margin-right: 2px;
+}
+QTabBar::tab:selected {
+    background: #1e293b;
+    color: #38bdf8;
+    font-weight: bold;
+}
+QTabBar::tab:hover:!selected {
+    background: #22314a;
+    color: #e2e8f0;
+}
+QTabBar::close-button {
+    image: none;
+    subcontrol-position: right;
+    background: transparent;
+    border: none;
+    width: 14px; height: 14px;
+    margin: 2px 2px 0 4px;
+    border-radius: 7px;
+}
+QTabBar::close-button:hover {
+    background: #ef4444;
+}
+
+/* ---------- 内嵌页通用 ---------- */
+#PageTitle {
+    color: #f1f5f9; font-size: 18px; font-weight: bold;
+    background: transparent; border: none;
+}
+#PageStatus {
+    color: #94a3b8; font-size: 14px; background: transparent; border: none;
+}
+#PageCard {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 8px;
+}
+#CardTitle {
+    color: #cbd5e1; font-size: 15px; font-weight: bold;
+    background: transparent; border: none;
+}
+#CardHint {
+    color: #94a3b8; font-size: 12px; background: transparent; border: none;
+}
+#CardStatus {
+    color: #94a3b8; font-size: 12px; background: transparent; border: none;
+}
+#CardInput {
+    background: #0f172a; color: #e2e8f0;
+    border: 1px solid #334155; border-radius: 6px;
+    padding: 8px 10px;
+}
+#CardInput:focus { border-color: #3b82f6; }
+#FontSizeLabel {
+    color: #38bdf8; font-size: 14px; font-weight: bold;
+    background: transparent; border: none; min-width: 56px;
+}
+#PagePrimaryButton {
+    background: #1d4ed8; color: white; border: none;
+    border-radius: 6px; padding: 8px 18px; font-size: 14px; font-weight: bold;
+}
+#PagePrimaryButton:hover { background: #2563eb; }
+#PagePrimaryButton:disabled { background: #334155; color: #64748b; }
+#PageGhostButton {
+    background: transparent; color: #94a3b8;
+    border: 1px solid #334155; border-radius: 6px;
+    padding: 8px 16px; font-size: 14px;
+}
+#PageGhostButton:hover { background: #334155; color: #e2e8f0; }
+#PageBadge { font-size: 13px; font-weight: bold; }
+
+/* QR Holder (白底) */
+#QRHolder { background: white; border-radius: 10px; border: none; }
+#QRHolder QLabel { color: #475569; font-size: 14px; background: transparent; border: none; }
+#QRStatus { color: #94a3b8; font-size: 14px; background: transparent; border: none; }
+
+/* ---------- 复选框 ---------- */
+QCheckBox { color: #e2e8f0; spacing: 6px; }
+QCheckBox::indicator {
+    width: 16px; height: 16px;
+    border: 2px solid #64748b; border-radius: 3px;
+    background: transparent;
+}
+QCheckBox::indicator:checked {
+    border-color: #38bdf8; background: #38bdf8;
+    image: url("{{CHECK_ICON}}");
+}
+QCheckBox::indicator:hover { border-color: #38bdf8; }
+
+/* ---------- 滑块 ---------- */
+QSlider::groove:horizontal {
+    height: 6px; background: #1f2937; border-radius: 3px;
+}
+QSlider::handle:horizontal {
+    width: 16px; height: 16px;
+    margin: -5px 0;
+    background: #38bdf8;
+    border-radius: 8px;
+    border: none;
+}
+QSlider::sub-page:horizontal {
+    background: #38bdf8; border-radius: 3px;
+}
+QSlider::tick:horizontal { color: #475569; }
+
+
+/* ---------- 通用表格 ---------- */
+QTableWidget {
+    background: #1e293b; color: #e2e8f0;
+    border: 1px solid #334155; border-radius: 4px;
+    gridline-color: #334155;
+}
+QTableWidget::item { padding: 4px; }
+QTableWidget::item:selected { background: #334155; color: #e2e8f0; }
+QHeaderView::section {
+    background: #1e293b; color: #94a3b8;
+    border: none; border-bottom: 1px solid #334155;
+    padding: 6px 4px; font-weight: bold;
+}
+
+/* ---------- 信息行 / 列表项 ---------- */
+#InfoRow {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 4px;
+}
+#UserTableRow, #TableRow { background: #1e293b; border: 1px solid #334155; border-radius: 6px; }
+#VerticalWorkCard { background: #1e293b; border: 2px solid #334155; border-radius: 8px; }
+
+/* ---------- 日志 ---------- */
+QTextEdit {
+    background: transparent; color: #e2e8f0;
+    font-family: monospace; font-size: 14px; border: none;
+}
+#CollapsibleLog {
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 6px;
+}

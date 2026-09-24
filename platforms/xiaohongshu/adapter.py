@@ -86,3 +86,229 @@ class XiaohongshuAdapter(PlatformAdapter):
 
     async def get_account_works(self, user_id: str, pages: int = 0) -> list[dict]: return []
     async def close(self): pass
+
+    # ===== 统一扩展接口 =====
+    async def fetch_user_profile(self, sec_uid: str):
+        """拉取用户资料。优先 H5 接口, 失败回落到占位。"""
+        from shared.core.adapter import norm_user
+        try:
+            from curl_cffi.requests import AsyncSession
+            h = {
+                "Accept": "application/json, text/plain, */*",
+                "User-Agent": ("Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)"
+                              " AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148"),
+                "Referer": "https://www.xiaohongshu.com/",
+            }
+            if self.cookie: h["Cookie"] = self.cookie
+            async with AsyncSession(impersonate=IMPERSONATE) as c:
+                r = await c.get(
+                    f"https://www.xiaohongshu.com/user/profile/{sec_uid}",
+                    headers=h, timeout=15, proxy=self.proxy)
+                if r.status_code == 200:
+                    # 从页面 JSON 提取 user
+                    marker = "window.__INITIAL_STATE__="
+                    idx = r.text.find(marker)
+                    if idx > -1:
+                        start = idx + len(marker)
+                        end = r.text.find("</script>", start)
+                        if end > -1:
+                            from json import loads
+                            try:
+                                data = loads(r.text[start:end].rstrip(";").strip()
+                                              .replace("undefined", "null"))
+                                user = (data.get("user") or {}).get("user", {})
+                                if not user:
+                                    user = data.get("user", {})
+                                if not user:
+                                    user_page = data.get("user", {}).get("userPage", {})
+                                    user = user_page.get("user", {}) or user_page
+                                if user:
+                                    return norm_user(user, "xiaohongshu")
+                            except Exception:
+                                pass
+        except Exception:
+            pass
+        return norm_user({"userId": sec_uid, "nickname": sec_uid, "platform": "xiaohongshu"}, "xiaohongshu")
+
+    async def fetch_user_posts(self, sec_uid: str, count: int = 20, max_cursor: str = "0"):
+        """拉取小红书用户作品 (H5 /api/sns/web/v1/user_posted)。"""
+        from shared.core.adapter import norm_work
+        try:
+            from curl_cffi.requests import AsyncSession
+            h = {
+                "Accept": "application/json, text/plain, */*",
+                "User-Agent": ("Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)"
+                              " AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148"),
+                "Referer": f"https://www.xiaohongshu.com/user/profile/{sec_uid}",
+            }
+            if self.cookie: h["Cookie"] = self.cookie
+            async with AsyncSession(impersonate=IMPERSONATE) as c:
+                r = await c.get(
+                    "https://edith.xiaohongshu.com/api/sns/web/v1/user_posted",
+                    params={"user_id": sec_uid, "cursor": max_cursor or "", "num": count},
+                    headers=h, timeout=15, proxy=self.proxy)
+                if r.status_code != 200:
+                    return []
+                try:
+                    payload = r.json()
+                except Exception:
+                    return []
+                if not payload.get("success"):
+                    return []
+                notes = (payload.get("data") or {}).get("notes") or []
+                out = []
+                for n in notes:
+                    note_card = n.get("note_card") or n
+                    out.append(norm_work({
+                        "noteId": note_card.get("note_id") or n.get("note_id", ""),
+                        "title": note_card.get("title") or note_card.get("display_title", ""),
+                        "type": note_card.get("type", "normal"),
+                        "user": {
+                            "nickname": note_card.get("user", {}).get("nickname", ""),
+                            "userId": note_card.get("user", {}).get("user_id", ""),
+                        },
+                        "interactInfo": {
+                            "likedCount": note_card.get("interact_info", {}).get("liked_count", 0),
+                            "commentCount": note_card.get("interact_info", {}).get("comment_count", 0),
+                        },
+                        "cover": (note_card.get("cover") or {}).get("url_default", ""),
+                        "video": note_card.get("video"),
+                        "imageList": note_card.get("image_list") or [],
+                    }, "xiaohongshu"))
+                return out
+        except Exception:
+            return []
+
+    async def fetch_current_user(self):
+        """获取当前登录小红书用户 (从 /api/sns/web/v1/user/self_info)。"""
+        from shared.core.adapter import norm_user
+        try:
+            from curl_cffi.requests import AsyncSession
+            h = {
+                "Accept": "application/json, text/plain, */*",
+                "User-Agent": ("Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)"
+                              " AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148"),
+                "Referer": "https://www.xiaohongshu.com/",
+            }
+            if self.cookie: h["Cookie"] = self.cookie
+            async with AsyncSession(impersonate=IMPERSONATE) as c:
+                r = await c.get(
+                    "https://edith.xiaohongshu.com/api/sns/web/v1/user/self_info",
+                    headers=h, timeout=15, proxy=self.proxy)
+                if r.status_code != 200:
+                    return None
+                try:
+                    payload = r.json()
+                except Exception:
+                    return None
+                if not payload.get("success"):
+                    return None
+                user = (payload.get("data") or {}).get("user") or {}
+                if not user:
+                    return None
+                return norm_user({
+                    "userId": user.get("user_id", ""),
+                    "nickname": user.get("nickname", ""),
+                    "avatar": user.get("avatar", ""),
+                    "signature": user.get("desc", ""),
+                    "follower_count": user.get("fans", 0),
+                    "following_count": user.get("follows", 0),
+                    "aweme_count": user.get("notes", 0),
+                }, "xiaohongshu")
+        except Exception:
+            return None
+
+    async def fetch_collection(self, cursor: str = "0", count: int = 20):
+        """拉取小红书收藏作品 (从 /api/sns/web/v1/collection/list)。"""
+        from shared.core.adapter import norm_work
+        try:
+            from curl_cffi.requests import AsyncSession
+            h = {
+                "Accept": "application/json, text/plain, */*",
+                "User-Agent": ("Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)"
+                              " AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148"),
+                "Referer": "https://www.xiaohongshu.com/",
+            }
+            if self.cookie: h["Cookie"] = self.cookie
+            async with AsyncSession(impersonate=IMPERSONATE) as c:
+                items = []
+                pcursor = cursor or ""
+                while len(items) < count:
+                    r = await c.get(
+                        "https://edith.xiaohongshu.com/api/sns/web/v1/collection/list",
+                        params={"cursor": pcursor, "num": count},
+                        headers=h, timeout=15, proxy=self.proxy)
+                    if r.status_code != 200:
+                        break
+                    try:
+                        payload = r.json()
+                    except Exception:
+                        break
+                    if not payload.get("success"):
+                        break
+                    notes = (payload.get("data") or {}).get("notes") or []
+                    if not notes:
+                        break
+                    for n in notes:
+                        note_card = n.get("note_card") or n
+                        items.append(norm_work({
+                            "noteId": note_card.get("note_id") or n.get("note_id", ""),
+                            "title": note_card.get("title") or note_card.get("display_title", ""),
+                            "type": note_card.get("type", "normal"),
+                            "user": {
+                                "nickname": note_card.get("user", {}).get("nickname", ""),
+                                "userId": note_card.get("user", {}).get("user_id", ""),
+                            },
+                            "interactInfo": {
+                                "likedCount": note_card.get("interact_info", {}).get("liked_count", 0),
+                            },
+                            "cover": (note_card.get("cover") or {}).get("url_default", ""),
+                            "video": note_card.get("video"),
+                            "imageList": note_card.get("image_list") or [],
+                        }, "xiaohongshu"))
+                    pcursor = str((payload.get("data") or {}).get("cursor", ""))
+                    if not pcursor or pcursor == "0":
+                        break
+                return items[:count]
+        except Exception:
+            return None
+
+    async def fetch_user_following(self, sec_uid: str, count: int = 20, max_time: str = "0"):
+        """拉取小红书关注列表 (从 /api/sns/web/v1/user/followings)。"""
+        from shared.core.adapter import norm_user
+        try:
+            from curl_cffi.requests import AsyncSession
+            h = {
+                "Accept": "application/json, text/plain, */*",
+                "User-Agent": ("Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)"
+                              " AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148"),
+                "Referer": f"https://www.xiaohongshu.com/user/profile/{sec_uid}",
+            }
+            if self.cookie: h["Cookie"] = self.cookie
+            async with AsyncSession(impersonate=IMPERSONATE) as c:
+                users = []
+                cursor = max_time or ""
+                while len(users) < count:
+                    r = await c.get(
+                        "https://edith.xiaohongshu.com/api/sns/web/v1/user/followings",
+                        params={"user_id": sec_uid, "cursor": cursor, "num": count},
+                        headers=h, timeout=15, proxy=self.proxy)
+                    if r.status_code != 200:
+                        break
+                    try:
+                        payload = r.json()
+                    except Exception:
+                        break
+                    if not payload.get("success"):
+                        break
+                    arr = (payload.get("data") or {}).get("users") or []
+                    if not arr:
+                        break
+                    for u in arr:
+                        users.append(norm_user(u, "xiaohongshu"))
+                    cursor = str((payload.get("data") or {}).get("cursor", ""))
+                    if not cursor or cursor == "0":
+                        break
+                return {"followings": users[:count], "has_more": False} if users else None
+        except Exception:
+            return None

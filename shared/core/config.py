@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-
 from .constants import VOLUME
 from .storage import StorageOps, StorageConfig
 
@@ -18,7 +17,6 @@ class AppConfig:
     storage_mode: str = "flat"
     storage_format: str = "json"
     dedup: bool = True
-    language: str = "zh_CN"
     # 输出格式
     default_profile: str = "mp4_copy"
     default_video_codec: str = "copy"
@@ -31,14 +29,17 @@ class AppConfig:
     download_metadata: bool = True
     # FFmpeg
     ffmpeg_path: str = ""
+    # 外观
+    font_size: int = 14   # 12~20, 14 默认
 
     def to_dict(self) -> dict:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, d: dict) -> AppConfig:
+    def from_dict(cls, d: dict) -> dict:
+        """兼容旧版嵌套 storage 字段; 只保留当前 dataclass 已声明的字段。"""
         valid = {f.name for f in cls.__dataclass_fields__.values()}
-        return cls(**{k: v for k, v in d.items() if k in valid})
+        return {k: v for k, v in d.items() if k in valid}
 
 
 class ConfigManager:
@@ -52,17 +53,8 @@ class ConfigManager:
             try:
                 with open(CONFIG_FILE, encoding="utf-8") as f:
                     data = json.load(f)
-                # 兼容旧格式
-                flat = {}
-                if "storage" in data:
-                    s = data["storage"]
-                    flat["storage_mode"] = s.get("mode", "flat")
-                    flat["storage_format"] = s.get("format", "json")
-                    flat["dedup"] = s.get("dedup", True)
-                for k, v in data.items():
-                    if k not in ("storage", "platforms"):
-                        flat.setdefault(k, v)
-                cls._config = AppConfig.from_dict(flat)
+                flat = cls._flatten_old(data)
+                cls._config = AppConfig(**cls._filter(flat))
                 return cls._config
             except Exception:
                 pass
@@ -85,3 +77,22 @@ class ConfigManager:
             data_format=config.storage_format,
             dedup=config.dedup,
         ))
+
+    # ===== 内部辅助 =====
+    @staticmethod
+    def _flatten_old(data: dict) -> dict:
+        """兼容旧版 {storage: {mode, format, dedup}, language} 嵌套结构。"""
+        flat = dict(data)
+        if "storage" in flat and isinstance(flat["storage"], dict):
+            s = flat.pop("storage")
+            flat.setdefault("storage_mode", s.get("mode", "flat"))
+            flat.setdefault("storage_format", s.get("format", "json"))
+            flat.setdefault("dedup", s.get("dedup", True))
+        flat.pop("language", None)   # 仅中文, 忽略旧字段
+        return flat
+
+    @staticmethod
+    def _filter(d: dict) -> dict:
+        """仅保留当前 dataclass 声明的字段。"""
+        valid = {f.name for f in AppConfig.__dataclass_fields__.values()}
+        return {k: v for k, v in d.items() if k in valid}

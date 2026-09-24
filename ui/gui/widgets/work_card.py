@@ -1,4 +1,7 @@
-"""作品卡片 — 与作品资料卡一致的「左封面 + 右资料」布局，供批量预览复用。"""
+"""作品卡片 — 与作品资料卡一致的「左封面 + 右资料」布局，供批量预览复用。
+
+详情行使用真 QWidget 边框行 (QLabel 富文本不支持 div border CSS)。
+"""
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QMouseEvent, QPixmap
 from PySide6.QtWidgets import (
@@ -7,50 +10,110 @@ from PySide6.QtWidgets import (
 
 from .cover_label import CoverLabel
 
-__all__ = ["build_work_html", "WorkCardWidget"]
+__all__ = ["build_work_rows", "build_full_work_rows", "InfoRow", "WorkCardWidget"]
 
 
-def build_work_html(work: dict) -> str:
-    """生成作品资料 HTML — 与作品资料卡详情字段保持一致。"""
-    lines = []
-    if work.get('title'):
-        lines.append(f"<b>标题:</b> {work['title']}")
-    if work.get('author_name'):
-        lines.append(f"<b>作者:</b> {work['author_name']}")
-    if work.get('platform'):
-        lines.append(f"<b>平台:</b> {work['platform']}")
-    if work.get('status'):
-        lines.append(f"<b>状态:</b> {work['status']}")
-    if work.get('digg_count'):
-        lines.append(f"<b>点赞:</b> {work['digg_count']}")
-    if work.get('comment_count'):
-        lines.append(f"<b>评论:</b> {work['comment_count']}")
-    if work.get('view_count'):
-        lines.append(f"<b>播放:</b> {work['view_count']}")
-    if work.get('duration'):
-        lines.append(f"<b>时长:</b> {work['duration']}秒")
-    if work.get('video_url'):
-        url = work['video_url']
-        lines.append(f"<b>视频:</b> {url[:70]}{'...' if len(url) > 70 else ''}")
-    if work.get('image_urls'):
-        lines.append(f"<b>图片:</b> {len(work['image_urls'])} 张")
-    if work.get('has_stream'):
-        lines.append(f"<b>流地址:</b> {'有' if work['has_stream'] else '无'}")
-    if work.get('flv_qualities'):
-        lines.append(f"<b>FLV 清晰度:</b> {', '.join(work['flv_qualities'])}")
-    if work.get('hls_qualities'):
-        lines.append(f"<b>HLS 清晰度:</b> {', '.join(work['hls_qualities'])}")
-    if not lines:
-        lines.append(f"<b>作品ID:</b> {work.get('work_id', '?')}")
-    return "<br>".join(lines)
+def build_full_work_rows(work: dict) -> list[tuple[str, str]]:
+    """作品 → [(标签, 值)] 行列表 (作品资料卡用, 全字段)。"""
+    rows: list[tuple[str, str]] = []
+
+    def add(key, label, fmt=None):
+        v = work.get(key)
+        if v in (None, "", [], {}):
+            return
+        rows.append((label, fmt(v) if fmt else str(v)))
+
+    add("title", "标题")
+    add("desc", "描述")
+    add("author_name", "作者")
+    for k in ("author_id", "user_id", "sec_user_id"):
+        if work.get(k):
+            rows.append(("作者ID", str(work[k])))
+            break
+    add("platform", "平台")
+    add("status", "状态")
+    add("work_id", "作品ID")
+    add("digg_count", "点赞")
+    add("comment_count", "评论")
+    add("view_count", "播放")
+    add("collect_count", "收藏")
+    add("share_count", "转发")
+    add("duration", "时长", fmt=lambda v: f"{v} 秒")
+    add("create_time", "发布时间")
+    add("share_url", "分享链接")
+    add("video_url", "视频地址")
+    add("image_urls", "图片", fmt=lambda v: f"{len(v)} 张")
+    add("has_stream", "流地址", fmt=lambda v: "有" if v else "无")
+    add("flv_qualities", "FLV 清晰度", fmt=lambda v: ", ".join(map(str, v)))
+    add("hls_qualities", "HLS 清晰度", fmt=lambda v: ", ".join(map(str, v)))
+    skip = {k for k, _ in rows} | {
+        "cover", "cover_url", "pic", "video", "video_url_raw",
+        "author_id", "user_id", "sec_user_id"}
+    for k, v in work.items():
+        if k in skip or v in (None, "", [], {}):
+            continue
+        if isinstance(v, (dict, list)):
+            continue
+        rows.append((k, str(v)))
+    return rows
+
+
+def build_work_rows(work: dict) -> list[tuple[str, str]]:
+    """作品 → 精简行列表 (批量卡片用)。"""
+    rows: list[tuple[str, str]] = []
+    if work.get("title"):
+        rows.append(("标题", str(work["title"])))
+    if work.get("author_name"):
+        rows.append(("作者", str(work["author_name"])))
+    aid = work.get("author_id") or work.get("user_id") or work.get("sec_user_id")
+    if aid:
+        rows.append(("作者ID", str(aid)))
+    if work.get("platform"):
+        rows.append(("平台", str(work["platform"])))
+    if work.get("digg_count"):
+        rows.append(("点赞", str(work["digg_count"])))
+    if work.get("comment_count"):
+        rows.append(("评论", str(work["comment_count"])))
+    if work.get("view_count"):
+        rows.append(("播放", str(work["view_count"])))
+    if work.get("duration"):
+        rows.append(("时长", f"{work['duration']}秒"))
+    if work.get("image_urls"):
+        rows.append(("图片", f"{len(work['image_urls'])} 张"))
+    wid = work.get("work_id") or "?"
+    rows.append(("作品ID", str(wid)))
+    return rows
+
+
+class InfoRow(QFrame):
+    """信息行 (真边框): 标签 | 值。所有详情展示统一用此行。"""
+
+    def __init__(self, label: str, value: str, parent=None):
+        super().__init__(parent)
+        self.setObjectName("InfoRow")
+        self.setStyleSheet(
+            "QFrame#InfoRow { background: #1e293b;"
+            " border: 1px solid #334155; border-radius: 4px; }")
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(8, 4, 8, 4)
+        lay.setSpacing(8)
+        lab = QLabel(str(label))
+        lab.setStyleSheet(
+            "color: #64748b; font-size: 14px; background: transparent;"
+            " border: none;")
+        lab.setMinimumWidth(64)
+        lay.addWidget(lab, 0)
+        val = QLabel(str(value))
+        val.setWordWrap(True)
+        val.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        val.setStyleSheet(
+            "color: #e2e8f0; font-size: 14px; background: transparent;"
+            " border: none;")
+        lay.addWidget(val, 1)
 
 
 class WorkCardWidget(QFrame):
-    """作品卡片：左封面 + 右资料（与作品资料卡一致），点击卡片切换选中。
-
-    选中态通过高亮边框 + 角落对勾角标表达，鼠标点击卡片任意位置即可切换，
-    右上角同时提供复选框用于精确勾选。
-    """
+    """作品卡片：左封面 + 右资料（边框行），点击卡片切换选中。"""
 
     checked_changed = Signal(str, bool)
 
@@ -79,9 +142,9 @@ class WorkCardWidget(QFrame):
         self._cover.setFixedSize(152, 96)
         body.addWidget(self._cover, 0, Qt.AlignTop)
 
-        # 右侧：资料（与作品资料卡一致的字段展示）
+        # 右侧：资料 (边框行)
         right = QVBoxLayout()
-        right.setSpacing(4)
+        right.setSpacing(3)
 
         check_row = QHBoxLayout()
         check_row.setSpacing(6)
@@ -96,19 +159,14 @@ class WorkCardWidget(QFrame):
         self._badge.setFixedSize(22, 22)
         self._badge.setStyleSheet(
             "background: #0ea5e9; color: #0f172a; border-radius: 11px;"
-            " font-size: 13px; font-weight: bold;")
+            " font-size: 14px; font-weight: bold;")
         self._badge.setText("✓")
         check_row.addWidget(self._badge)
         right.addLayout(check_row)
 
-        self._info = QLabel(build_work_html(work))
-        self._info.setWordWrap(True)
-        self._info.setTextFormat(Qt.RichText)
-        self._info.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self._info.setAlignment(Qt.AlignTop)
-        self._info.setStyleSheet("color: #cbd5e1; background: transparent;"
-                                " border: none;")
-        right.addWidget(self._info, 1)
+        for label, value in build_work_rows(work):
+            right.addWidget(InfoRow(label, value))
+        right.addStretch()
         body.addLayout(right, 1)
 
         outer.addWidget(self._body)
@@ -146,8 +204,7 @@ class WorkCardWidget(QFrame):
         self.checked_changed.emit(self._work_id, v)
 
     def mousePressEvent(self, ev: QMouseEvent):
-        # 点击卡片任意处（除复选框/文本选择）切换选中
-        if ev.button() == Qt.LeftButton and not self._info.hasSelectedText():
+        if ev.button() == Qt.LeftButton:
             self.set_checked(not self._checked, emit=True)
         super().mousePressEvent(ev)
 
