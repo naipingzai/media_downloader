@@ -64,6 +64,12 @@ QSplitter::handle:horizontal { width: 6px; }
 #SectionPanel { background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; }
 #SectionTitle { color: #334155; font-size: 14px; font-weight: bold; background: transparent; border: none; padding: 0; }
 
+/* ---------- 左侧外框 (作者资料 + 作品资料) ---------- */
+#LeftPanel { background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; }
+#AuthorCard { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; }
+#WorkInfoCard { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; }
+#LeftSubTitle { color: #334155; font-size: 14px; font-weight: bold; background: transparent; border: none; }
+
 /* ---------- 链接 ---------- */
 #LinkInput { background: #f8fafc; color: #0f172a; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 10px; }
 #LinkInput:focus { border-color: #2563eb; }
@@ -106,9 +112,7 @@ QComboBox QAbstractItemView::item { padding: 6px 10px; min-height: 24px; }
 #StatusCookie { font-weight: bold; }
 #StatusVersion { background: rgba(217, 119, 6, 0.12); color: #d97706; padding: 0 12px; font-weight: bold; border: none; font-size: 14px; }
 
-/* ---------- 作品资料区 (EmbeddedTabs · QTabWidget) ---------- */
-#EmbeddedTabs { background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; }
-QTabWidget::pane { border: 1px solid #cbd5e1; background: #ffffff; border-radius: 6px; top: -1px; }
+/* ---------- 页签 (数据窗口等通用) ---------- */
 QTabBar::tab {
     background: #f1f5f9; color: #475569;
     padding: 8px 18px 8px 14px;
@@ -116,20 +120,21 @@ QTabBar::tab {
     border-bottom: none;
     border-top-left-radius: 6px;
     border-top-right-radius: 6px;
-    margin-right: 2px;
+    margin-right: 8px;
 }
 QTabBar::tab:selected { background: #ffffff; color: #2563eb; font-weight: bold; }
 QTabBar::tab:hover:!selected { background: #e2e8f0; color: #0f172a; }
 QTabBar::close-button {
-    image: none;
+    image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'><line x1='2' y1='2' x2='8' y2='8' stroke='%2364748b' stroke-width='1.4'/><line x1='8' y1='2' x2='2' y2='8' stroke='%2364748b' stroke-width='1.4'/></svg>");
     subcontrol-position: right;
     background: transparent;
     border: none;
     width: 14px; height: 14px;
-    margin: 2px 2px 0 4px;
-    border-radius: 7px;
+    margin: 0 6px 0 6px;
 }
-QTabBar::close-button:hover { background: #ef4444; }
+QTabBar::close-button:hover {
+    image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'><line x1='2' y1='2' x2='8' y2='8' stroke='%23ef4444' stroke-width='1.8'/><line x1='8' y1='2' x2='2' y2='8' stroke='%23ef4444' stroke-width='1.8'/></svg>");
+}
 
 /* ---------- 内嵌页 ---------- */
 #PageTitle { color: #0f172a; font-size: 18px; font-weight: bold; background: transparent; border: none; }
@@ -140,6 +145,13 @@ QTabBar::close-button:hover { background: #ef4444; }
 #CardStatus { color: #64748b; font-size: 12px; background: transparent; border: none; }
 #CardInput { background: #f8fafc; color: #0f172a; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 10px; }
 #CardInput:focus { border-color: #2563eb; }
+#CookieInput {
+    background: #ffffff; color: #0f172a;
+    border: 1px solid #cbd5e1; border-radius: 6px;
+    padding: 8px 10px;
+    font-family: monospace; font-size: 13px;
+}
+#CookieInput:focus { border-color: #2563eb; }
 #FontSizeLabel { color: #2563eb; font-size: 14px; font-weight: bold; background: transparent; border: none; min-width: 56px; }
 #PagePrimaryButton { background: #1d4ed8; color: white; border: none; border-radius: 6px; padding: 8px 18px; font-size: 14px; font-weight: bold; }
 #PagePrimaryButton:hover { background: #2563eb; }

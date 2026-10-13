@@ -60,14 +60,20 @@ class DouyinAdapter(PlatformAdapter):
     def parse_detail(self, raw: dict) -> dict | None:
         aweme = raw.get("aweme_detail") if isinstance(raw, dict) else None
         if not aweme: return None
-        video = aweme.get("video", {})
+        video = aweme.get("video", {}) or {}
         play = video.get("play_addr", {}).get("url_list", [])
         bit_rate = video.get("bit_rate", [])
         if bit_rate:
             best = max(bit_rate, key=lambda x: x.get("bit_rate", 0))
             play = best.get("play_addr", {}).get("url_list", []) or play
         author = aweme.get("author", {})
-        # 封面（取第一个可用）
+        # 图集 (图片动态) 检测: image_post_info / images / aweme_type 68
+        try:
+            image_urls = self.extract_images(aweme)
+        except Exception:
+            image_urls = []
+        is_images = bool(image_urls)
+        # 封面（取第一个可用; 图集取首图）
         cover = ""
         for key in ("cover", "origin_cover", "dynamic_cover"):
             c = video.get(key)
@@ -76,27 +82,91 @@ class DouyinAdapter(PlatformAdapter):
                 if urls:
                     cover = urls[0]
                     break
+        if not cover and image_urls:
+            cover = image_urls[0]
         stat = aweme.get("statistics", {})
         # 所在合集 ID (作品属于合集时存在)
         mix_info = aweme.get("mix_info") or {}
         mix_id = str(mix_info.get("mix_id") or "")
+        aweme_id = aweme.get("aweme_id", "")
+        # 图集的分享链接用 /note/, 视频用 /video/
+        share_url = (f"https://www.douyin.com/note/{aweme_id}" if is_images
+                     else f"https://www.douyin.com/video/{aweme_id}")
         return {
-            "platform": "douyin", "work_id": aweme.get("aweme_id", ""),
+            "platform": "douyin", "work_id": aweme_id,
             "title": aweme.get("desc", ""),
             "mix_id": mix_id,
             "author_name": author.get("nickname", ""),
             "author_id": author.get("uid", ""),
             "sec_user_id": author.get("sec_uid", ""),
-            "video_url": play[0] if play else "",
+            "media_type": "images" if is_images else "video",
+            "image_urls": image_urls,
+            # 图集没有真正的视频: video_url 置空, 避免幻灯片视频被当作品下载
+            "video_url": "" if is_images else (play[0] if play else ""),
             "cover_url": cover,
-            "duration": int(video.get("duration") or 0) // 1000,
-            "share_url": f"https://www.douyin.com/video/{aweme.get('aweme_id', '')}",
+            "duration": (0 if is_images
+                         else int(video.get("duration") or 0) // 1000),
+            "share_url": share_url,
             "digg_count": stat.get("digg_count", 0),
             "comment_count": stat.get("comment_count", 0),
             "view_count": stat.get("play_count", 0),
         }
 
+    @staticmethod
+    def extract_images(aweme: dict) -> list[str]:
+        """提取图集图片地址 (兼容 image_post_info.images / 顶层 images / aweme_type=68)。"""
+        urls: list[str] = []
+        def _pick(node: dict) -> str:
+            if not isinstance(node, dict):
+                return ""
+            for key in ("display_image", "owner_watermark_image",
+                        "user_watermark_image", "thumbnail_image"):
+                sub = node.get(key)
+                if isinstance(sub, dict):
+                    lst = sub.get("url_list") or []
+                    if lst:
+                        return lst[0]
+            lst = node.get("url_list") or []
+            return lst[0] if lst else ""
+        # 1) image_post_info.images (抖音图文标准结构)
+        ipi = aweme.get("image_post_info")
+        if not isinstance(ipi, dict):
+            ipi = {}
+        imgs = ipi.get("images")
+        if not isinstance(imgs, list):
+            imgs = []
+        for it in imgs:
+            u = _pick(it)
+            if u:
+                urls.append(u)
+        # 2) 顶层 images (部分接口返回)
+        if not urls:
+            top = aweme.get("images")
+            if not isinstance(top, list):
+                top = []
+            for it in top:
+                if not isinstance(it, dict):
+                    continue
+                u = (it.get("url") if isinstance(it.get("url"), str) else "") or _pick(it)
+                if u:
+                    urls.append(u)
+        return urls
+
+    @staticmethod
+    def is_image_post(aweme: dict) -> bool:
+        """判断是否为图集/图文动态。"""
+        if not isinstance(aweme, dict):
+            return False
+        if aweme.get("image_post_info"):
+            return True
+        if aweme.get("images"):
+            return True
+        return aweme.get("aweme_type") == 68
+
     def get_download_urls(self, work: dict) -> list[str]:
+        images = [u for u in (work.get("image_urls") or []) if u]
+        if images:
+            return images
         url = work.get("video_url", "")
         return [url] if url else []
 

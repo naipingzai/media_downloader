@@ -10,7 +10,7 @@ COOKIE_FILE = VOLUME / "cookies.json"
 
 
 class CookieManager:
-    """管理多个平台的 Cookie。
+    """管理多个平台的 Cookie (单例)。
 
     存储格式:
     {
@@ -20,10 +20,32 @@ class CookieManager:
             "work": {"douyin": "...", ...}
         }
     }
+
+    作为单例实现: 全工程共用一个实例, 避免多个实例内存数据不同步
+    (例如登录页保存 Cookie 后, 主窗口缓存仍是旧数据导致读取为空)。
     """
 
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            inst = super().__new__(cls)
+            inst._initialized = False
+            cls._instance = inst
+        return cls._instance
+
     def __init__(self):
+        # 单例: 只初始化一次; 之后每次构造都从磁盘刷新数据
+        if not getattr(self, "_initialized", False):
+            self.data = self._load()
+            self._initialized = True
+        else:
+            self.reload()
+
+    def reload(self):
+        """从磁盘重新加载 (外部文件被修改后可用)。"""
         self.data = self._load()
+        return self.data
 
     def _load(self) -> dict:
         if COOKIE_FILE.is_file():
@@ -43,6 +65,8 @@ class CookieManager:
 
     def get(self, platform: str = "") -> str:
         """获取当前激活的 Cookie。platform 为空时返回全部平台的合并。"""
+        # 保证读取到最新落盘数据 (跨实例/跨页面一致)
+        self.reload()
         active = self.data.get("active", "默认")
         cookies = self.data.get("cookies", {}).get(active, {})
         if platform:

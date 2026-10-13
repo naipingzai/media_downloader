@@ -16,9 +16,11 @@ __all__ = ["build_work_rows", "build_full_work_rows", "InfoRow", "WorkCardWidget
 def build_full_work_rows(work: dict) -> list[tuple[str, str]]:
     """作品 → [(标签, 值)] 行列表 (作品资料卡用, 全字段)。"""
     rows: list[tuple[str, str]] = []
+    used: set[str] = set()   # 记录已处理的原始 key (防止中英文重复)
 
     def add(key, label, fmt=None):
         v = work.get(key)
+        used.add(key)
         if v in (None, "", [], {}):
             return
         rows.append((label, fmt(v) if fmt else str(v)))
@@ -26,6 +28,7 @@ def build_full_work_rows(work: dict) -> list[tuple[str, str]]:
     add("title", "标题")
     add("desc", "描述")
     add("author_name", "作者")
+    used.update(("author_id", "user_id", "sec_user_id"))
     for k in ("author_id", "user_id", "sec_user_id"):
         if work.get(k):
             rows.append(("作者ID", str(work[k])))
@@ -46,9 +49,7 @@ def build_full_work_rows(work: dict) -> list[tuple[str, str]]:
     add("has_stream", "流地址", fmt=lambda v: "有" if v else "无")
     add("flv_qualities", "FLV 清晰度", fmt=lambda v: ", ".join(map(str, v)))
     add("hls_qualities", "HLS 清晰度", fmt=lambda v: ", ".join(map(str, v)))
-    skip = {k for k, _ in rows} | {
-        "cover", "cover_url", "pic", "video", "video_url_raw",
-        "author_id", "user_id", "sec_user_id"}
+    skip = used | {"cover", "cover_url", "pic", "video", "video_url_raw"}
     for k, v in work.items():
         if k in skip or v in (None, "", [], {}):
             continue

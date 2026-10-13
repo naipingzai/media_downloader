@@ -77,6 +77,27 @@ class DouyinOps(PlatformOps):
                 if not urls:
                     _log("  无下载地址"); continue
                 target = storage.resolve(work)
+                # 图集: 下载全部图片 (不下载幻灯片视频)
+                if work.get("media_type") == "images":
+                    stem = target.name.rsplit(".", 1)[0]
+                    dlc = create_async_client()
+                    try:
+                        dl = FileDownloader(client=dlc, save_dir=target.parent)
+                        ok_cnt = 0
+                        for j, img_url in enumerate(urls, 1):
+                            img_name = f"{stem}_{j:02d}.jpg"
+                            r = await dl.download_file(img_url, img_name)
+                            if r:
+                                ok_cnt += 1
+                                files.append(str(r))
+                    finally:
+                        await dlc.close()
+                    if ok_cnt:
+                        _log(f"  ✓ 图集 {ok_cnt}/{len(urls)} 张")
+                        storage.record_download(link.work_id)
+                    else:
+                        _log("  ✗ 图集下载失败")
+                    continue
                 dlc = create_async_client()
                 try:
                     dl = FileDownloader(client=dlc, save_dir=target.parent)
@@ -618,6 +639,31 @@ class DouyinOps(PlatformOps):
             }
             msg = f"  [{i}/{len(targets)}] {author}: {desc}"
             log.append(msg); self.log(msg)
+            # 图集优先: 图片动态下载全部图片 (不下载幻灯片视频)
+            from .adapter import DouyinAdapter
+            images = DouyinAdapter.extract_images(aw)
+            if images:
+                target = storage.resolve(work)
+                stem = target.name.rsplit(".", 1)[0]
+                dlc = create_async_client()
+                try:
+                    dl = FileDownloader(client=dlc, save_dir=target.parent)
+                    ok_cnt = 0
+                    for j, img_url in enumerate(images, 1):
+                        img_name = f"{stem}_{j:02d}.jpg"
+                        r = await dl.download_file(img_url, img_name)
+                        if r:
+                            ok_cnt += 1
+                            files.append(str(r))
+                    if ok_cnt:
+                        msg = f"    ✓ 图集 {ok_cnt}/{len(images)} 张"
+                        storage.record_download(aweme_id)
+                    else:
+                        msg = "    ✗ 图集下载失败"
+                finally:
+                    await dlc.close()
+                log.append(msg); self.log(msg)
+                continue
             video = aw.get("video", {})
             play = video.get("play_addr", {}).get("url_list", [])
             bit_rate = video.get("bit_rate", [])

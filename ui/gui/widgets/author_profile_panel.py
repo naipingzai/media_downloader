@@ -78,7 +78,7 @@ class AuthorProfilePanel(QFrame):
             " background: transparent; border: none;")
         center.addWidget(self._nick)
         self._sig = QLabel("")
-        self._sig.setWordWrap(True)
+        self._sig.setWordWrap(False)   # 单行截断, 防止撑高遮挡
         self._sig.setStyleSheet(
             "color: #94a3b8; font-size: 12px;"
             " background: transparent; border: none;")

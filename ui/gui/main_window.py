@@ -1,21 +1,20 @@
-"""主窗口 —— 重构 UI (保留原版布局)。
+"""主窗口 —— PySide6 GUI 桌面端主界面。
 
-布局:
-  ┌──────┬────────────────────────────────────────────────┐
-  │      │  链接栏 (顶)                                     │
-  │  侧  ├─────────────────────────────────────────────────┤
-  │  栏  │  作者资料卡 (顶部)                                │
-  │      ├─────────────────────────────────────────────────┤
-  │ 每行 │  │ 作品资料区 (多页内嵌 QTabWidget)              │
-  │ 加框 │  │  ├─ 作品资料 (默认, 不可关)                  │
-  │      │  │  ├─ 作品网格 / 用户列表 / 数据表格 / 登录    │
-  │      │  │  └─ 设置 (可关闭页签)                       │
-  │      ├─────────────────────────────────────────────────┤
-  │      │  功能面板                                         │
-  │      ├─────────────────────────────────────────────────┤
-  │      │  可折叠日志条                                     │
-  └──────┴────────────────────────────────────────────────┘
-                                底部状态栏: Cookie + 版本 + FFmpeg
+布局 (左 3 : 右 2):
+  ┌───────────────────────────────────────────────────────┐
+  │ 顶部横排栏: 品牌 | 平台按钮组 | 设置/暗色/登录/下载目录     │
+  ├─────────────────────┬─────────────────────────────────┤
+  │ ┌ 左侧外框 (统框) ─┐ │ ┌ 链接 ──────────────────────┐  │
+  │ │ 作者资料 (顶部)   │ │ │ 粘贴链接 + 解析预览          │  │
+  │ ├─────────────────┤ │ ├ 功能 ──────────────────────┤  │
+  │ │ 作品资料 (占满)  │ │ │ 作品操作/作者操作/平台功能    │  │
+  │ │  · 封面 + 详情   │ │ ├ 执行日志 (可折叠) ─────────┤  │
+  │ │  · 无页签        │ │ │ 实时日志 + 复制粘贴          │  │
+  │ └─────────────────┘ │ └───────────────────────────┘  │
+  └─────────────────────┴─────────────────────────────────┘
+  独立非模态窗口 (ToolWindow):
+    登录 / 设置 / 数据 (作品网格/列表/表格/评论)
+  底部状态栏: Cookie + 版本 + FFmpeg
 """
 import asyncio
 import subprocess
@@ -37,7 +36,7 @@ from .widgets.video_info import VideoInfoWidget
 from .widgets.author_profile_panel import AuthorProfilePanel
 from .widgets.log_panel import LogPanel
 from .widgets.section_panel import SectionPanel
-from .widgets.embedded_tabs import EmbeddedTabs
+from .widgets.tool_window import ToolWindow
 from .pages.work_grid_page import WorkGridPage
 from .pages.users_page import UsersPage
 from .pages.data_table_page import DataTablePage
@@ -338,7 +337,7 @@ class MainWindow(QMainWindow):
         self._pool.setMaxThreadCount(2)
         self._setup_pages()        # 先建可复用页 (login/settings 单例)
         self._setup_status_bar()
-        self._setup_ui()           # 再建主 UI (含 EmbeddedTabs)
+        self._setup_ui()           # 再建主 UI
 
     # ---------------- 可复用页 ----------------
     def _setup_pages(self):
@@ -347,6 +346,14 @@ class MainWindow(QMainWindow):
         self._settings_page.settings_saved.connect(self._on_settings_saved)
         self._login_page = LoginPage()
         self._login_page.cookie_changed.connect(self._refresh_cookie_status)
+        # 登录/设置以独立非模态窗口显示 (不再塞进作品资料区页签)
+        self._login_win = ToolWindow(
+            "登录", self._login_page, size=(560, 680), parent=self)
+        self._settings_win = ToolWindow(
+            "设置", self._settings_page, size=(720, 680), parent=self)
+        # 数据页 (作品网格/列表/表格/评论) 用独立窗口, 作品资料区只留作品资料
+        self._data_win = ToolWindow(
+            "数据", QWidget(), size=(900, 680), parent=self)
 
     # ---------------- 主 UI:
     #   顶 部  : 品牌 + 平台切换 + 工具/账号 横排按钮
@@ -370,18 +377,9 @@ class MainWindow(QMainWindow):
         body_lay = QHBoxLayout(body)
         body_lay.setContentsMargins(10, 10, 10, 8)
         body_lay.setSpacing(10)
-        # === 左: 作者 + 作品资料 (一个垂直容器) ===
-        left_col = QWidget()
-        left_v = QVBoxLayout(left_col)
-        left_v.setContentsMargins(0, 0, 0, 0)
-        left_v.setSpacing(10)
-        # 作者资料
-        sec_author = self._build_author_panel()
-        left_v.addWidget(sec_author)
-        # 作品资料
-        sec_video = self._build_video_panel()
-        left_v.addWidget(sec_video, 1)
-        body_lay.addWidget(left_col, 3)   # 左大 3
+        # === 左: 一个外框, 顶部作者资料卡 + 下方全部是作品资料区 ===
+        left_panel = self._build_left_panel()
+        body_lay.addWidget(left_panel, 3)   # 左大 3
         # === 右: 功能 + 日志 (垂直, 上下分割) ===
         right_col = QWidget()
         right_v = QVBoxLayout(right_col)
@@ -496,27 +494,62 @@ class MainWindow(QMainWindow):
         sec.setFixedHeight(86)        # 标题 + 输入框高度
         return sec
 
-    def _build_author_panel(self) -> SectionPanel:
+    # ---- 左侧外框: 作者资料卡(顶部) + 作品资料区(占满剩余) ----
+    def _build_left_panel(self) -> QFrame:
+        """左侧外框: 一个边框包住作者资料卡(顶部) 和 作品资料区(占满剩余)。
+
+        作者资料位于顶部固定高度, 下方的作品资料区随父控件拉伸。
+        """
+        from PySide6.QtWidgets import QSizePolicy
+
+        panel = QFrame()
+        panel.setObjectName("LeftPanel")
+        # 样式由主题 QSS (#LeftPanel / #AuthorCard / #LeftSubTitle) 提供
+        # 高度伸展占满中部
+        panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        v = QVBoxLayout(panel)
+        v.setContentsMargins(12, 10, 12, 12)
+        v.setSpacing(10)
+
+        # 顶部: 作者资料卡 (固定高度)
         self._author_panel = AuthorProfilePanel()
         self._author_panel.fetch_works_clicked.connect(self._on_fetch_works)
         self._author_panel.follow_list_clicked.connect(self._on_follow_list)
         self._author_panel.collect_list_clicked.connect(self._on_collect_list)
         self._author_panel.download_avatar_clicked.connect(self._on_download_avatar)
         self._author_panel.open_home_clicked.connect(self._on_open_home)
-        sec = SectionPanel("作者资料")
-        sec.addWidget(self._author_panel)
-        sec.setFixedHeight(160)
-        return sec
+        # 作者资料卡子框架: 边框 + 标题 (用 objectName 精确选择, 避免污染子控件)
+        author_sec = QFrame()
+        author_sec.setObjectName("AuthorCard")
+        author_lay = QVBoxLayout(author_sec)
+        author_lay.setContentsMargins(10, 6, 10, 6)
+        author_lay.setSpacing(4)
+        author_title = QLabel("作者资料")
+        author_title.setObjectName("LeftSubTitle")
+        author_lay.addWidget(author_title)
+        author_lay.addWidget(self._author_panel)
+        author_sec.setMinimumHeight(96)
+        v.addWidget(author_sec)
 
-    def _build_video_panel(self) -> SectionPanel:
+        # 下部: 作品资料区 (占满剩余高度, 无页签, 只显示作品资料)
         self._video_info = VideoInfoWidget()
-        # 锁死高度 · 上下滚动交给内部 ScrollArea
-        self._video_info.setFixedHeight(360)
-        self._tabs = EmbeddedTabs(self._video_info, default_title="作品资料")
-        sec = SectionPanel("作品资料")
-        sec.addWidget(self._tabs)
-        sec.setFixedHeight(400)        # 标题 + 4px padding + 内容
-        return sec
+        work_sec = QFrame()
+        work_sec.setObjectName("WorkInfoCard")
+        work_sec.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        work_lay = QVBoxLayout(work_sec)
+        work_lay.setContentsMargins(10, 6, 10, 6)
+        work_lay.setSpacing(4)
+        # 左上角标题 (固定保留)
+        work_title = QLabel("作品资料")
+        work_title.setObjectName("LeftSubTitle")
+        work_lay.addWidget(work_title)
+        work_lay.addWidget(self._video_info, 1)
+        v.addWidget(work_sec, 1)
+
+        # 保留旧 API (供其他逻辑调用, 不再使用)
+        self._video_panel = work_sec
+        self._author_panel_section = author_sec
+        return panel
 
     def _build_log_section(self) -> SectionPanel:
         self._log = LogPanel()
@@ -574,24 +607,6 @@ class MainWindow(QMainWindow):
         fp.stop_recording_clicked.connect(self._on_stop_recording)
         self._current_worker = None
         return fp
-
-    # (旧版侧栏已由顶部横排 TopBar 替代, 这里保留 _side_group 仅供历史参考)
-    _GROUP_STYLE = (
-        "QFrame#SideGroup { background: #1e293b;"
-        " border: 1px solid #334155; border-radius: 8px; }")
-
-    def _side_group(self, lay: QVBoxLayout, title: str) -> QVBoxLayout:
-        card = QFrame()
-        card.setObjectName("SideGroup")
-        card.setStyleSheet(self._GROUP_STYLE)
-        inner = QVBoxLayout(card)
-        inner.setContentsMargins(8, 8, 8, 8)
-        inner.setSpacing(6)
-        lbl = QLabel(title)
-        lbl.setObjectName("GroupTitle")
-        inner.addWidget(lbl)
-        lay.addWidget(card)
-        return inner
 
     # ---------------- 状态栏 ----------------
     def _setup_status_bar(self):
@@ -757,24 +772,27 @@ class MainWindow(QMainWindow):
         if not items:
             self._log.append("⚠ 关注列表: 没有数据", "#f59e0b")
             return
-        key = f"following.{self._current_user_profile.get('sec_user_id', 'me') if self._current_user_profile else 'me'}"
         page = UsersPage(title="关注列表")
         page.set_users(items, title="关注列表")
-        self._tabs.add_page(key, "关注列表", page)
+        self._open_data_window("关注列表", page)
 
     def _on_author_task_failed(self, err: str):
         self._log.append(f"✗ {err}", "#ef4444")
 
-    # ---------------- 内嵌页 (替代弹窗) ----------------
+    # ---------------- 数据窗口 (作品/列表/表格/评论) ----------------
+    def _open_data_window(self, title: str, page: QWidget):
+        """在独立非模态窗口中显示数据页 (替换作品资料区页签)。"""
+        self._data_win.set_content(page, title)
+        self._data_win.open()
+
     def _open_works_page(self, title: str, items: list[dict]):
         if not items:
             self._log.append(f"⚠ {title}: 没有数据", "#f59e0b")
             return
-        key = f"works.{self._current_platform}.{title}"
         page = WorkGridPage()
         page.set_works(items, title=title)
         page.download_requested.connect(self._on_download_selected)
-        self._tabs.add_page(key, title, page)
+        self._open_data_window(title, page)
         self._log.append(f"✓ {title}: {len(items)} 个作品 (已打开)", "#22c55e")
 
     def _open_data_page(self, title: str, data: list,
@@ -798,10 +816,9 @@ class MainWindow(QMainWindow):
             for i, r in enumerate(data[:200], 1):
                 cells = list(r) if isinstance(r, (list, tuple)) else [r]
                 rows.append([str(i)] + [str(c)[:40] for c in cells])
-        key = f"data.{title}"
         page = DataTablePage(title=title)
         page.set_rows(headers, rows, weights=weights, title=title)
-        self._tabs.add_page(key, title, page)
+        self._open_data_window(title, page)
 
     def _open_comments_page(self, items: list):
         if not items:
@@ -812,7 +829,7 @@ class MainWindow(QMainWindow):
         page = DataTablePage(title="评论")
         page.set_rows(["用户", "内容", "点赞"], rows,
                       weights=[1, 4, 1], title="评论列表")
-        self._tabs.add_page("comments", "评论列表", page)
+        self._open_data_window("评论列表", page)
 
     def _on_download_selected(self, ids: list):
         if not ids:
@@ -822,17 +839,14 @@ class MainWindow(QMainWindow):
                + self._author_panel.profile.get("sec_user_id", ""))
         self._on_execute("account", url, selected=ids)
 
-    # ---------------- 设置 / 登录 / 日志 ----------------
+    # ---------------- 设置 / 登录 (独立非模态窗口) ----------------
     def _open_settings(self):
         self._settings_page._config = ConfigManager.load()
         self._settings_page._suspend = True
         slider = self._settings_page._font_slider
         slider.setValue(self._settings_page._config.font_size)
         self._settings_page._suspend = False
-        if not self._tabs.has_page("settings"):
-            self._tabs.add_page("settings", "设置", self._settings_page)
-        else:
-            self._tabs.set_current("settings")
+        self._settings_win.open()
 
     def _open_login(self):
         if not self._current_platform:
@@ -845,10 +859,7 @@ class MainWindow(QMainWindow):
         except Exception:
             hint = ""
         self._login_page.setup(self._current_platform, hint, cookie)
-        if not self._tabs.has_page("login"):
-            self._tabs.add_page("login", "账号登录", self._login_page)
-        else:
-            self._tabs.set_current("login")
+        self._login_win.open()
 
     def _toggle_theme(self):
         app = QApplication.instance()
@@ -1113,4 +1124,9 @@ class MainWindow(QMainWindow):
             self._login_page.shutdown()
         except Exception:
             pass
+        for win in (getattr(self, "_login_win", None),
+                    getattr(self, "_settings_win", None),
+                    getattr(self, "_data_win", None)):
+            if win is not None:
+                win.close()
         super().closeEvent(event)
