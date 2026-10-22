@@ -5,3 +5,4 @@ pyperclip>=1.11.0
 PySide6>=6.6
 qrcode[pil]>=7.4
 Pillow>=10.0
+textual>=0.60

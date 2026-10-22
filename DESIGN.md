@@ -1,7 +1,8 @@
 # MediaDownloader — 设计与布局说明
 
 > **项目定调**：聚焦 PySide6 GUI 桌面端。整合 TikTokDownloader / KS-Downloader / XHS-Downloader / bilibili-downloader 的能力。
-> **不做**：命令行参数解析 / TUI / Web / API。
+> **不做**：复杂命令行参数解析 / Web / API。
+> **新增**：TUI (Textual) — 布局与功能完全同步 GUI 设计。
 
 ---
 
@@ -136,3 +137,26 @@ ui/gui/
 - `resources/theme.py` 提供 `toggle_theme(app)` 在暗/亮主题间切换。
 - 两份 QSS 使用相同的 objectName 选择器（`#LeftPanel` / `#AuthorCard` / `#LeftSubTitle` 等），保证布局一致。
 - 主题切换时左侧外框、独立窗口内容自动适配。
+
+
+---
+
+## 六、TUI (Textual) — 与 GUI 设计同步
+
+`ui/tui/app.py` 提供 `TuiApp`，布局/交互与 GUI 一一对应：
+
+| GUI (PySide6) | TUI (Textual) | 说明 |
+|------|------|------|
+| 顶部横排栏 | `#topbar` (Header + 平台按钮) | 品牌 / 平台切换 / 快捷键 |
+| 左侧外框 | `#left-panel` | 作者资料卡(顶) + 作品资料(占满) |
+| 链接面板 | `#link-input` + Ctrl+P | 粘贴链接 → 解析预览 |
+| FeaturePanel | `#features-box` | 作品操作/作者操作/平台功能(FeatureMeta 动态) |
+| LogPanel | `#log-panel` (RichLog) | 实时彩色日志 (✓绿 ✗红 ⚠黄 ▸青) |
+| 状态栏 | `#footer-status` | Cookie 完整性 / FFmpeg / 版本 |
+| ToolWindow(登录) | `LoginScreen` | QR 终端字符画 + Cookie 粘贴 |
+| ToolWindow(设置) | `SettingsScreen` | 存储/输出/下载选项/FFmpeg/字号 |
+| ToolWindow(数据) | `DataTableScreen` | 评论/作品/关注/收藏 表格 |
+| WorkGridPage | `BatchSelectScreen` | 预览 → 空格勾选 → Ctrl+D 下载 |
+| FeatureWorker | `_run_bg` (线程+事件循环) | PlatformBus.run 后台执行 |
+
+快捷键: `q`退出 · `l`登录 · `s`设置 · `d`下载目录 · `Ctrl+P`解析 · Tab 切换焦点
