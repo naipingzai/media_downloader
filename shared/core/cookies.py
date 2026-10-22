@@ -1,7 +1,6 @@
 """Cookie 管理器 —— 支持多 Cookie 存储、切换、更新。"""
 import json
 import os
-from pathlib import Path
 from shared.core.constants import VOLUME
 
 __all__ = ["CookieManager"]

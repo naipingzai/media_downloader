@@ -1,5 +1,4 @@
 """小红书平台操作表。"""
-from pathlib import Path
 from shared.core.ops import PlatformOps, FeatureMeta, FeatureResult
 from shared.core.config import ConfigManager
 
@@ -101,7 +100,6 @@ class XiaohongshuOps(PlatformOps):
                 log.append(f"[{i}/{len(notes)}] 解析失败, 跳过")
                 continue
             title = work.get("title", "")[:40]
-            note_id = work.get("work_id", "?")
             log.append(f"[{i}/{len(notes)}] {work.get('author_name', '?')}: {title}")
             urls = adapter.get_download_urls(work)
             if not urls:

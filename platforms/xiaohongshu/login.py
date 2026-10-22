@@ -2,7 +2,7 @@
 import httpx
 import qrcode
 from PIL import Image
-from shared.core.login import PlatformLoginManager, LoginBus
+from shared.core.login import PlatformLoginManager
 
 API_BASE = "https://edith.xiaohongshu.com"
 QR_CREATE = "/api/sns/web/v1/login/qrcode/create"

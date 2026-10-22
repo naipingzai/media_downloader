@@ -1,6 +1,6 @@
 """平台总线 —— 注册、发现、调度。所有 UI 的唯一入口。"""
 from __future__ import annotations
-from abc import ABC, abstractmethod
+from abc import ABC
 from dataclasses import dataclass, field
 from pathlib import Path
 

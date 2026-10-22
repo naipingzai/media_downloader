@@ -51,7 +51,7 @@ class APIRequester:
                 return resp.json()
             except Exception:
                 return resp.text
-        except RequestException as e:
+        except RequestException:
             raise
 
     async def _do_post(self, url: str, data: dict, headers: dict, **kwargs) -> Any:
@@ -63,9 +63,8 @@ class APIRequester:
                 return resp.json()
             except Exception:
                 return resp.text
-        except RequestException as e:
+        except RequestException:
             raise
 
     def _log_error(self, error: Exception, attempt: int):
-        from ..core.constants import ERROR
-        print(f"[重试 {attempt}] 请求失败: {error}")
+                print(f"[重试 {attempt}] 请求失败: {error}")

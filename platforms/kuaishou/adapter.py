@@ -1,11 +1,8 @@
 """Kuaishou platform adapter - real API."""
 from json import dumps
 from shared.core import (
-    PlatformAdapter, PlatformConfig, DownloadResult,
-    create_async_client, PARAMS_HEADERS, USERAGENT, IMPERSONATE,
+    PlatformAdapter, PlatformConfig, IMPERSONATE, PARAMS_HEADERS,
 )
-from shared.core.format import cookie_str_to_dict
-from shared.translation import _
 from .. import register_platform
 
 @register_platform("kuaishou")

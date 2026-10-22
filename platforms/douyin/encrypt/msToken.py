@@ -3,7 +3,7 @@ from json import dumps
 from random import randint
 from string import ascii_lowercase, ascii_uppercase, digits
 from time import time
-from typing import TYPE_CHECKING, Union
+from typing import Any
 from urllib.parse import quote, urlencode
 
 from shared.core.constants import PARAMS_HEADERS, PARAMS_HEADERS_TIKTOK, USERAGENT
@@ -11,9 +11,6 @@ from .ttWid import TtWid
 from .xBogus import XBogus
 from shared.core.session import request_params
 from shared.translation import _
-
-if TYPE_CHECKING:
-    pass
 
 __all__ = ["MsToken", "MsTokenTikTok"]
 
@@ -88,7 +85,7 @@ class MsToken:
     @classmethod
     async def _get_ms_token(
         cls,
-        logger: Union["BaseLogger", "LoggerManager", "Logger"],
+        logger: Any,
         params: dict,
         headers: dict,
         proxy: str,
@@ -104,12 +101,13 @@ class MsToken:
             **kwargs,
         ):
             return TtWid.extract(logger, response, cls.NAME)
-        logger.error(_("获取 {name} 参数失败！").format(name=cls.NAME))
+        if logger:
+            logger.error(_("获取 {name} 参数失败！").format(name=cls.NAME))
 
     @classmethod
     async def get_real_ms_token(
         cls,
-        logger: Union["BaseLogger", "LoggerManager", "Logger"],
+        logger: Any,
         headers: dict,
         token="",
         proxy: str = None,
@@ -127,7 +125,7 @@ class MsToken:
     @classmethod
     async def get_long_ms_token(
         cls,
-        logger: Union["BaseLogger", "LoggerManager", "Logger"],
+        logger: Any,
         headers: dict,
         token="",
         proxy: str = None,
@@ -208,7 +206,7 @@ class MsTokenTikTok(MsToken):
     @classmethod
     async def get_real_ms_token(
         cls,
-        logger: Union["BaseLogger", "LoggerManager", "Logger"],
+        logger: Any,
         headers: dict,
         token="",
         proxy: str = None,
@@ -231,13 +229,11 @@ class MsTokenTikTok(MsToken):
 
 
 async def test():
-    # from src.testers import Logger
-
-    print("抖音", await MsToken.get_real_ms_token(Logger(), PARAMS_HEADERS, proxy=None))
+    print("抖音", await MsToken.get_real_ms_token(None, PARAMS_HEADERS, proxy=None))
     print(
         "抖音",
         await MsToken.get_long_ms_token(
-            Logger(),
+            None,
             PARAMS_HEADERS,
             proxy=None,
         ),
@@ -245,16 +241,17 @@ async def test():
     print(
         "TikTok",
         await MsTokenTikTok.get_real_ms_token(
-            Logger(), PARAMS_HEADERS_TIKTOK, proxy="http://127.0.0.1:10808"
+            None, PARAMS_HEADERS_TIKTOK, proxy="http://127.0.0.1:10808"
         ),
     )
     print(
         "TikTok",
         await MsTokenTikTok.get_long_ms_token(
-            Logger(), PARAMS_HEADERS_TIKTOK, proxy="http://127.0.0.1:10808"
+            None, PARAMS_HEADERS_TIKTOK, proxy="http://127.0.0.1:10808"
         ),
     )
 
 
 if __name__ == "__main__":
     run(test())
+

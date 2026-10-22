@@ -1,5 +1,5 @@
 """视频/音频格式和编码配置。"""
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 
 

@@ -1,9 +1,8 @@
 """快手 QR 码登录。"""
 import httpx
 import qrcode
-from io import BytesIO
 from PIL import Image
-from shared.core.login import PlatformLoginManager, LoginBus
+from shared.core.login import PlatformLoginManager
 
 API_BASE = "https://account.kuaishou.com"
 QR_TOKEN = "/rest/cc/pc/login/token"
@@ -30,7 +29,7 @@ class KuaishouLoginManager(PlatformLoginManager):
             raise RuntimeError(f"快手QR生成失败: {resp.text}")
         token = resp.json().get("token", "")
         if not token:
-            raise RuntimeError(f"快手QR生成失败: 无token")
+            raise RuntimeError("快手QR生成失败: 无token")
         qr = qrcode.QRCode(version=1, box_size=10, border=2)
         qr.add_data(QR_PAGE)
         qr.make(fit=True)

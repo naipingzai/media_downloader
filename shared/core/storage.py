@@ -115,10 +115,9 @@ class StorageOps:
         return str(path)
 
     async def _save_csv(self, data: list[dict], path: Path) -> str:
-        import aiofiles, csv
+        import aiofiles
         async with aiofiles.open(path, "w", encoding="utf-8-sig", newline="") as f:
             if data:
-                writer = csv.DictWriter(f, fieldnames=data[0].keys())
                 await f.write(",".join(data[0].keys()) + "\n")
                 for row in data:
                     await f.write(",".join(str(v) for v in row.values()) + "\n")

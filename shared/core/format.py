@@ -1,5 +1,4 @@
 """格式化工具函数。"""
-from http.cookies import SimpleCookie
 from re import compile
 
 __all__ = [

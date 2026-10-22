@@ -1,9 +1,8 @@
 """Bilibili QR code login."""
 import httpx
 import qrcode
-from io import BytesIO
 from PIL import Image
-from shared.core.login import PlatformLoginManager, LoginBus
+from shared.core.login import PlatformLoginManager
 
 PASSPORT_URL = "https://passport.bilibili.com"
 QR_GENERATE = "/x/passport-login/web/qrcode/generate"

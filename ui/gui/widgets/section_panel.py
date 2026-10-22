@@ -7,7 +7,6 @@
   4. 功能
 """
 from __future__ import annotations
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFrame, QLabel, QVBoxLayout, QWidget,
 )

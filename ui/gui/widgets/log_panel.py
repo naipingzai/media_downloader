@@ -1,6 +1,5 @@
 """日志面板 —— 静态日志条 (固定高度, 不可折叠)。"""
 from __future__ import annotations
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QTextEdit, QVBoxLayout
 
 

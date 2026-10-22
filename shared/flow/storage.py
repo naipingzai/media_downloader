@@ -1,7 +1,6 @@
 """Step 5: 数据存储 —— 持久化 + 记录管理。"""
 from __future__ import annotations
 from pathlib import Path
-from typing import Any
 
 __all__ = ["DataStorage"]
 
@@ -47,11 +46,10 @@ class DataStorage:
             f.write(work_id + "\n")
 
     async def _save_csv(self, data: list[dict], name: str) -> str:
-        import csv, aiofiles
+        import aiofiles
         path = self.save_dir / f"{name}.csv"
         async with aiofiles.open(path, "w", encoding="utf-8-sig", newline="") as f:
             if data:
-                writer = csv.DictWriter(f, fieldnames=data[0].keys())
                 await f.write(",".join(data[0].keys()) + "\n")
                 for row in data:
                     await f.write(",".join(str(v) for v in row.values()) + "\n")

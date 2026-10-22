@@ -1,7 +1,7 @@
 """Douyin/TikTok platform adapter — all APIs."""
 from shared.core import (
-    PlatformAdapter, PlatformConfig, DownloadResult,
-    PARAMS_HEADERS, USERAGENT, IMPERSONATE, VOLUME,
+    PlatformAdapter, PlatformConfig,
+    PARAMS_HEADERS, USERAGENT, IMPERSONATE,
 )
 from shared.core.format import cookie_str_to_dict
 from .. import register_platform

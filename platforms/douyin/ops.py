@@ -1,9 +1,7 @@
 """抖音平台操作表 —— 完全自包含。"""
 import asyncio
 import time
-from pathlib import Path
 from shared.core.ops import PlatformOps, FeatureMeta, FeatureResult
-from shared.core.storage import StorageOps, safe_name
 from shared.core.config import ConfigManager
 
 
@@ -346,7 +344,7 @@ class DouyinOps(PlatformOps):
                         "platform": "douyin", "work_id": fid,
                         "title": name, "author_name": "",
                         "cover": "", "duration": 0, "digg_count": count,
-                        "extra": f"收藏夹",
+                        "extra": "收藏夹",
                     })
                 return FeatureResult(True, f"共 {len(folders)} 个收藏夹，输入收藏夹ID或链接下载",
                                      log=log, data=items)
@@ -396,7 +394,7 @@ class DouyinOps(PlatformOps):
         adapter = await self._get_adapter(cookie)
         storage = ConfigManager.get_storage_ops("douyin")
         try:
-            from urllib.parse import urlparse, parse_qs
+            from urllib.parse import urlparse
             parsed = urlparse(url.strip())
             room_id = parsed.path.rstrip("/").split("/")[-1]
             if room_id.isdigit() and len(room_id) <= 14:
@@ -492,7 +490,7 @@ class DouyinOps(PlatformOps):
                 "-f", "flv",
                 flv_path,
             ]
-            log.append(f"  录制中... (点击「停止录制」结束)")
+            log.append("  录制中... (点击「停止录制」结束)")
 
             try:
                 process = subprocess.Popen(

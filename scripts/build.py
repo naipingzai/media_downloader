@@ -39,10 +39,10 @@ def get_pyinstaller_cmd():
         "--noconfirm",
         "--clean",
         "--additional-hooks-dir", str(ROOT / "hooks"),
-        f"--add-data", f"{ffmpeg_path}{sep}.",
+        "--add-data", f"{ffmpeg_path}{sep}.",
         # Bundle QSS 主题文件 (运行时由 theme.py 从 ui/gui/resources 读取)
-        f"--add-data", f"{qss_dir}{sep}ui/gui/resources",
-        f"--add-data", f"{check_svg}{sep}static",
+        "--add-data", f"{qss_dir}{sep}ui/gui/resources",
+        "--add-data", f"{check_svg}{sep}static",
         # Core dependencies
         "--hidden-import", "curl_cffi",
         "--hidden-import", "curl_cffi._curl_cffi",
@@ -153,7 +153,7 @@ def main():
         return
 
     cmd = get_pyinstaller_cmd()
-    print(f"\nRunning PyInstaller...")
+    print("\nRunning PyInstaller...")
     subprocess.run(cmd, check=True)
 
     print("\n=== Build Complete ===")

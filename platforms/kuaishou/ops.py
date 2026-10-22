@@ -1,7 +1,5 @@
 """快手平台操作表。"""
-from pathlib import Path
 from shared.core.ops import PlatformOps, FeatureMeta, FeatureResult
-from shared.core.storage import StorageOps, StorageConfig, safe_name
 from shared.core.config import ConfigManager
 
 

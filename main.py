@@ -1,6 +1,6 @@
 """MediaDownloader 入口。"""
 from contextlib import suppress
-from sys import argv, path
+from sys import path
 from pathlib import Path
 
 _root = str(Path(__file__).resolve().parent)

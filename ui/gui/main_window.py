@@ -23,12 +23,12 @@ from PySide6.QtCore import QObject, Qt, QRunnable, QThreadPool, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
-    QPushButton, QScrollArea, QVBoxLayout, QWidget,
+    QPushButton, QVBoxLayout, QWidget,
     QApplication,
 )
 from shared.core import (
-    PROJECT_NAME, VOLUME, __VERSION__, CookieManager, PlatformBus,
-    platform_name as _pn, FFmpegManager, LoginBus, ConfigManager, norm_user,
+    PROJECT_NAME, VOLUME, CookieManager, PlatformBus,
+    platform_name as _pn, FFmpegManager, ConfigManager, norm_user,
 )
 from .threads.worker import FeatureWorker
 from .widgets.feature_panel import FeaturePanel
@@ -835,7 +835,7 @@ class MainWindow(QMainWindow):
         if not ids:
             return
         self._log.append(f"✓ 已选择 {len(ids)} 个作品, 开始批量下载", "#22c55e")
-        url = (f"https://www.douyin.com/user/"
+        url = ("https://www.douyin.com/user/"
                + self._author_panel.profile.get("sec_user_id", ""))
         self._on_execute("account", url, selected=ids)
 

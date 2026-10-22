@@ -1,8 +1,7 @@
 """全局配置管理。"""
 from __future__ import annotations
 import json
-from dataclasses import dataclass, field, asdict
-from pathlib import Path
+from dataclasses import dataclass, asdict
 from .constants import VOLUME
 from .storage import StorageOps, StorageConfig
 

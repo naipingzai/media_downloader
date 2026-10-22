@@ -1,9 +1,7 @@
 """Xiaohongshu/RedNote platform adapter - HTML parsing."""
 from shared.core import (
-    PlatformAdapter, PlatformConfig, DownloadResult,
-    create_async_client, PARAMS_HEADERS, IMPERSONATE,
+    PlatformAdapter, PlatformConfig, IMPERSONATE,
 )
-from shared.translation import _
 from .. import register_platform
 
 @register_platform("xiaohongshu")

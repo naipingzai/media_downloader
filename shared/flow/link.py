@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse, parse_qs
+import re
 
 if TYPE_CHECKING:
     from curl_cffi.requests import AsyncSession
@@ -63,7 +64,6 @@ class LinkExtractor:
 
     def _split_urls(self, text: str) -> list[str]:
         """将文本按空格/换行分割为URL列表。"""
-        import re
         return [u for u in re.split(r"[\s\n]+", text.strip()) if u.startswith("http")]
 
     async def _resolve_short_url(self, url: str) -> str:
@@ -83,7 +83,6 @@ class LinkExtractor:
 
     def _classify_url(self, url: str, platform: str = "") -> ExtractedLink | None:
         """根据URL模式分类链接类型。"""
-        import re
 
         # 抖音
         if "douyin.com" in url or "iesdouyin.com" in url:

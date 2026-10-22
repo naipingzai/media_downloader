@@ -1,5 +1,5 @@
 """HTTP 会话工厂。"""
-from typing import Optional, Union
+from typing import Optional
 
 from curl_cffi.requests import AsyncSession, Session
 

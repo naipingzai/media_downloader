@@ -2,8 +2,7 @@
 import hashlib
 import time
 import urllib.parse
-from typing import Optional
-from shared.core import PlatformAdapter, PlatformConfig, PARAMS_HEADERS, USERAGENT, IMPERSONATE
+from shared.core import PlatformAdapter, PlatformConfig, USERAGENT, IMPERSONATE
 from .. import register_platform
 
 MIXIN_KEY_ENC_TAB = [
@@ -432,54 +431,6 @@ class BilibiliAdapter(PlatformAdapter):
             return {}
 
     # ===== 统一扩展接口 =====
-    async def fetch_current_user(self):
-        """获取当前登录用户 (Cookie 作者信息)。"""
-        from shared.core.adapter import norm_user
-        try:
-            from curl_cffi.requests import AsyncSession
-            async with AsyncSession(impersonate=IMPERSONATE) as c:
-                r = await c.get(NAV_URL, headers=self._headers(), proxy=self.proxy)
-                if r.status_code != 200:
-                    return None
-                d = self._sj(r).get("data") or {}
-                if not d.get("isLogin"):
-                    return None
-                return norm_user({
-                    "mid": d.get("mid", ""), "uname": d.get("uname", ""),
-                    "face": d.get("face", ""), "sign": "",
-                }, "bilibili")
-        except Exception:
-            return None
-
-    async def fetch_user_profile(self, sec_uid: str):
-        """获取作者资料 (统一归一化)。"""
-        from shared.core.adapter import norm_user
-        info = await self.fetch_user_info(sec_uid)
-        return norm_user({
-            "mid": sec_uid, "name": info.get("name", ""),
-            "fans": info.get("fans", 0), "attention": info.get("following", 0),
-            "sign": info.get("sign", ""),
-        }, "bilibili") if info else None
-
-    async def fetch_user_posts(self, sec_uid: str, count: int = 20, max_cursor: str = "0"):
-        """获取作者所有作品 (统一归一化, 一次性返回)。"""
-        from shared.core.adapter import norm_work
-        videos = await self.fetch_user_videos(sec_uid, max_count=max(count, 30))
-        return [norm_work(v, "bilibili") for v in videos]
-
-    async def fetch_user_following(self, sec_uid: str, count: int = 20, max_time: str = "0"):
-        """获取关注列表 (B站 API 需登录, 暂不支持)。"""
-        return None
-
-    async def fetch_collection(self, cursor: str = "0", count: int = 20):
-        """获取收藏作品 (统一归一化)。"""
-        from shared.core.adapter import norm_work
-        try:
-            items = await self.fetch_favorite_list(fid="0")
-            return [norm_work(v, "bilibili") for v in items]
-        except Exception:
-            return None
-
     async def fetch_comments(self, work_id: str, *args, **kwargs):
         """获取作品评论 (统一归一化, 兼容单参/多参)。"""
         from shared.core.adapter import norm_comment

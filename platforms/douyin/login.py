@@ -1,9 +1,8 @@
 """抖音 QR 码登录。"""
 import httpx
 import qrcode
-from io import BytesIO
 from PIL import Image
-from shared.core.login import PlatformLoginManager, LoginBus
+from shared.core.login import PlatformLoginManager
 
 SSO_BASE = "https://sso.douyin.com"
 QR_CONNECT = "/get_qrcode/"
