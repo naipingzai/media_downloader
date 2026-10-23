@@ -91,12 +91,27 @@ def get_pyinstaller_cmd():
         "--hidden-import", "ui.gui.cover_loader",
         "--hidden-import", "ui.gui.widgets",
         "--hidden-import", "ui.gui.widgets.cover_label",
-        "--hidden-import", "ui.gui.widgets.display_area",
+        "--hidden-import", "ui.gui.widgets.work_card",
+        "--hidden-import", "ui.gui.pages.base_page",
         "--hidden-import", "ui.gui.pages.work_grid_page",
         "--hidden-import", "ui.gui.pages.users_page",
         "--hidden-import", "ui.gui.pages.data_table_page",
         "--hidden-import", "ui.gui.pages.login_page",
         "--hidden-import", "ui.gui.pages.settings_page",
+        # TUI (Textual)
+        "--hidden-import", "textual",
+        "--hidden-import", "ui.tui",
+        "--hidden-import", "ui.tui.app",
+        "--hidden-import", "ui.tui.screens",
+        # 平台加密/登录模块 (动态导入, PyInstaller 需显式声明)
+        "--hidden-import", "platforms.douyin.encrypt.msToken",
+        "--hidden-import", "platforms.douyin.encrypt.ttWid",
+        "--hidden-import", "platforms.douyin.encrypt.webID",
+        "--hidden-import", "platforms.douyin.encrypt.device_id",
+        "--hidden-import", "platforms.bilibili.login",
+        "--hidden-import", "platforms.kuaishou.login",
+        "--hidden-import", "platforms.xiaohongshu.login",
+        "--hidden-import", "shared.core.login",
         str(ROOT / "main.py"),
     ]
     return cmd

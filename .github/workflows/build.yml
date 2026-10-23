@@ -1,194 +1,112 @@
-name: Build & Release
+name: Build
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [main, master]
+    tags: ["v*"]
+  pull_request:
+    branches: [main, master]
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Release tag (e.g. v1.0.0)'
-        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-linux:
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
-
-      - name: Download FFmpeg
-        run: |
-          mkdir -p build
-          cd build
-          curl -L -o ffmpeg.tar.xz https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz
-          tar xf ffmpeg.tar.xz
-          find . -name 'ffmpeg' -type f -executable -exec cp {} ./ffmpeg \;
-          chmod +x ./ffmpeg
-          ./ffmpeg -version | head -1
-
-      - name: Build executable
-        run: >
-          pyinstaller
-          --name MediaDownloader
-          --onefile
-          --windowed
-          --noconfirm
-          --clean
-          --add-data "build/ffmpeg:."
-          --add-data "ui/gui/resources/styles.qss:ui/gui/resources"
-          --hidden-import curl_cffi
-          --hidden-import curl_cffi._curl_cffi
-          --hidden-import PySide6
-          --hidden-import PySide6.QtWidgets
-          --hidden-import PySide6.QtCore
-          --hidden-import PySide6.QtGui
-          --hidden-import qrcode
-          --hidden-import PIL
-          --hidden-import PIL.Image
-          main.py
-
-      - name: Get version
-        id: version
-        run: |
-          if [ -n "${{ github.event.inputs.tag }}" ]; then
-            echo "version=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
-          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          else
-            echo "version=v$(date +%Y%m%d)" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: MediaDownloader-linux-${{ steps.version.outputs.version }}
-          path: dist/MediaDownloader
-          compression-level: 0
-
-  build-windows:
-    runs-on: windows-2022
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
-
-      - name: Download FFmpeg
-        shell: cmd
-        run: |
-          mkdir build
-          cd build
-          curl -L -o ffmpeg.zip https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip
-          7z x ffmpeg.zip
-          for /r %%f in (ffmpeg.exe) do copy "%%f" ffmpeg.exe
-          ffmpeg.exe -version
-
-      - name: Build executable
-        shell: cmd
-        run: >
-          pyinstaller
-          --name MediaDownloader
-          --onefile
-          --windowed
-          --noconfirm
-          --clean
-          --add-data "build/ffmpeg.exe;."
-          --add-data "ui/gui/resources/styles.qss;ui/gui/resources"
-          --hidden-import curl_cffi
-          --hidden-import curl_cffi._curl_cffi
-          --hidden-import PySide6
-          --hidden-import PySide6.QtWidgets
-          --hidden-import PySide6.QtCore
-          --hidden-import PySide6.QtGui
-          --hidden-import qrcode
-          --hidden-import PIL
-          --hidden-import PIL.Image
-          main.py
-
-      - name: Get version
-        id: version
+  build:
+    name: Build (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            binary: dist/MediaDownloader
+            artifact: MediaDownloader-linux-x86_64
+            ffmpeg_cache: build/ffmpeg-linux.tar.xz
+          - os: windows-2022
+            platform: windows
+            binary: dist/MediaDownloader.exe
+            artifact: MediaDownloader-windows-x86_64.exe
+            ffmpeg_cache: build/ffmpeg-win.zip
+    defaults:
+      run:
         shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Linux system libraries
+        if: matrix.platform == 'linux'
         run: |
-          if [ -n "${{ github.event.inputs.tag }}" ]; then
-            echo "version=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
-          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          else
-            echo "version=v$(date +%Y%m%d)" >> $GITHUB_OUTPUT
-          fi
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgl1 libegl1 libxkbcommon0 libdbus-1-3
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install "pyinstaller>=6.0"
+
+      - name: Cache FFmpeg archive
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.ffmpeg_cache }}
+          key: ffmpeg-${{ matrix.platform }}-v1
+
+      - name: Build single-file binary
+        run: python scripts/build.py
+
+      - name: Verify binary
+        run: |
+          ls -lh "${{ matrix.binary }}"
+          test -f "${{ matrix.binary }}"
+
+      - name: Prepare release artifact
+        run: |
+          mkdir -p out
+          cp "${{ matrix.binary }}" "out/${{ matrix.artifact }}"
+          chmod +x "out/${{ matrix.artifact }}" || true
+          cd out
+          sha256sum "${{ matrix.artifact }}" > "SHA256SUMS-${{ matrix.platform }}.txt"
+          ls -lh
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MediaDownloader-windows-${{ steps.version.outputs.version }}
-          path: dist/MediaDownloader.exe
-          compression-level: 0
+          name: ${{ matrix.artifact }}
+          path: out/*
+          if-no-files-found: error
+          retention-days: 30
 
   release:
-    needs: [build-linux, build-windows]
-    runs-on: ubuntu-22.04
-    permissions:
-      contents: write
+    name: Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          path: artifacts
+          path: dist
           merge-multiple: true
 
-      - name: Get version
-        id: version
-        run: |
-          if [ -n "${{ github.event.inputs.tag }}" ]; then
-            echo "version=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
-          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          else
-            echo "version=v$(date +%Y%m%d)" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Create Release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.version }}
-          name: MediaDownloader ${{ steps.version.outputs.version }}
-          draft: false
-          prerelease: false
+          files: dist/*
           generate_release_notes: true
-          files: |
-            artifacts/MediaDownloader
-            artifacts/MediaDownloader.exe
-          body: |
-            ## MediaDownloader ${{ steps.version.outputs.version }}
-
-            ### Download
-            - **Linux**: `MediaDownloader` — 双击运行，内置 FFmpeg
-            - **Windows**: `MediaDownloader.exe` — 双击运行，内置 FFmpeg
-
-            ### Features
-            - 抖音、快手、小红书、B站 多平台支持
-            - 下载、批量下载、收藏夹、评论采集
-            - DASH 音视频合并
-            - 实时日志输出
-            - 中英文国际化
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          fail_on_unmatched_files: true
