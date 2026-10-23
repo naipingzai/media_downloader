@@ -10,7 +10,9 @@ from PySide6.QtWidgets import (
     QScrollArea, QVBoxLayout, QWidget,
 )
 from ..widgets.cover_label import CoverLabel
+from ..widgets.work_card import InfoRow, build_work_rows
 from ..cover_loader import CoverLoader
+from shared.core import norm_work
 
 
 class _VerticalCard(QFrame):
@@ -19,6 +21,9 @@ class _VerticalCard(QFrame):
     def __init__(self, work: dict, parent=None):
         super().__init__(parent)
         self.setObjectName("VerticalWorkCard")
+        work = dict(work or {})
+        if not work.get("cover_url"):
+            work = {**norm_work(work, work.get("platform", "")), **work}
         self._work_id = str(work.get("work_id", ""))
         self._checked = True
         self._cover_url = (work.get("cover_url") or work.get("cover")
@@ -37,22 +42,17 @@ class _VerticalCard(QFrame):
             if cached is not None:
                 self._cover.set_source_pixmap(cached)
         lay.addWidget(self._cover)
-        # 描述
+        # 标题 (统一布局: 完整可选中)
         desc = (work.get("title") or work.get("desc") or "(无描述)").strip()
-        if len(desc) > 60:
-            desc = desc[:60] + "…"
         desc_lbl = QLabel(desc)
         desc_lbl.setWordWrap(True)
         desc_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        desc_lbl.setStyleSheet("color: #e2e8f0; font-weight: bold;"
+                               " font-size: 14px;")
         lay.addWidget(desc_lbl)
-        # 链接
-        url = work.get("share_url") or work.get("video_url") or ""
-        if url:
-            url_lbl = QLabel(
-                f"<a href='{url}' style='color:#38bdf8'>{url[:48]}…</a>")
-            url_lbl.setTextFormat(Qt.RichText)
-            url_lbl.setOpenExternalLinks(True)
-            lay.addWidget(url_lbl)
+        # 标准信息行 (与作品资料卡 InfoRow 一致)
+        for label, value in build_work_rows(work)[:5]:
+            lay.addWidget(InfoRow(label, value))
 
     def _on_cover_ready(self, url: str, pix: QPixmap):
         if url == self._cover_url:
