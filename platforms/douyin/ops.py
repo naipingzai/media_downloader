@@ -6,6 +6,16 @@ from shared.core.config import ConfigManager
 
 
 class DouyinOps(PlatformOps):
+    _adapter_class = None  # 由 __init__ 绑定 (避免循环导入)
+
+    @classmethod
+    def adapter_class(cls):
+        """返回 adapter 类 (框架统一接口)。"""
+        if cls._adapter_class is None:
+            from .adapter import DouyinAdapter
+            cls._adapter_class = DouyinAdapter
+        return cls._adapter_class
+
     platform_id = "douyin"
     display_name = "Douyin / TikTok"
     cookie_hint = "需要完整 Cookie 字符串"

@@ -25,17 +25,23 @@ def build_full_work_rows(work: dict) -> list[tuple[str, str]]:
             return
         rows.append((label, fmt(v) if fmt else str(v)))
 
+    # 固定信息项 (统一中文标签, 不显示原始英文字段名)
     add("title", "标题")
     add("desc", "描述")
     add("author_name", "作者")
-    used.update(("author_id", "user_id", "sec_user_id"))
-    for k in ("author_id", "user_id", "sec_user_id"):
+    used.update(("author_id", "user_id", "sec_user_id", "sec_uid",
+                 "author_mid", "nickname", "name"))
+    for k in ("author_id", "user_id", "sec_user_id", "sec_uid", "author_mid"):
         if work.get(k):
             rows.append(("作者ID", str(work[k])))
             break
     add("platform", "平台")
-    add("status", "状态")
+    add("media_type", "类型", fmt=lambda v: {
+        "images": "图集", "video": "视频", "note": "图文",
+    }.get(str(v), str(v)))
     add("work_id", "作品ID")
+    add("mix_id", "合集ID")
+    add("status", "状态")
     add("digg_count", "点赞")
     add("comment_count", "评论")
     add("view_count", "播放")
@@ -45,17 +51,12 @@ def build_full_work_rows(work: dict) -> list[tuple[str, str]]:
     add("create_time", "发布时间")
     add("share_url", "分享链接")
     add("video_url", "视频地址")
-    add("image_urls", "图片", fmt=lambda v: f"{len(v)} 张")
+    add("image_urls", "图片", fmt=lambda v: f"{len(v)} 张"
+        if isinstance(v, list) else "1 张")
     add("has_stream", "流地址", fmt=lambda v: "有" if v else "无")
     add("flv_qualities", "FLV 清晰度", fmt=lambda v: ", ".join(map(str, v)))
     add("hls_qualities", "HLS 清晰度", fmt=lambda v: ", ".join(map(str, v)))
-    skip = used | {"cover", "cover_url", "pic", "video", "video_url_raw"}
-    for k, v in work.items():
-        if k in skip or v in (None, "", [], {}):
-            continue
-        if isinstance(v, (dict, list)):
-            continue
-        rows.append((k, str(v)))
+    # 其余字段不再展示 (避免英文字段名泄露到界面)
     return rows
 
 

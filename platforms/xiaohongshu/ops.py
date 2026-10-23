@@ -4,6 +4,16 @@ from shared.core.config import ConfigManager
 
 
 class XiaohongshuOps(PlatformOps):
+    _adapter_class = None  # 由 __init__ 绑定 (避免循环导入)
+
+    @classmethod
+    def adapter_class(cls):
+        """返回 adapter 类 (框架统一接口)。"""
+        if cls._adapter_class is None:
+            from .adapter import XiaohongshuAdapter
+            cls._adapter_class = XiaohongshuAdapter
+        return cls._adapter_class
+
     platform_id = "xiaohongshu"
     display_name = "Xiaohongshu / RedNote"
     cookie_hint = ""

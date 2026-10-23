@@ -4,6 +4,16 @@ from shared.core.config import ConfigManager
 
 
 class BilibiliOps(PlatformOps):
+    _adapter_class = None  # 由 __init__ 绑定 (避免循环导入)
+
+    @classmethod
+    def adapter_class(cls):
+        """返回 adapter 类 (框架统一接口)。"""
+        if cls._adapter_class is None:
+            from .adapter import BilibiliAdapter
+            cls._adapter_class = BilibiliAdapter
+        return cls._adapter_class
+
     platform_id = "bilibili"
     display_name = "Bilibili"
     cookie_hint = "需要 SESSDATA Cookie（从浏览器 DevTools 复制）"
