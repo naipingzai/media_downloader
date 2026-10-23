@@ -39,23 +39,30 @@ class VideoInfoWidget(QFrame):
         outer.setContentsMargins(10, 10, 10, 10)
         outer.setSpacing(8)
 
-        # ===== 标题栏 (默认隐藏, 有作品时才显示) =====
-        self._header = QHBoxLayout()
-        self._header.setContentsMargins(0, 0, 0, 0)
-        self._header.setSpacing(6)
-        # 内部不再显示"作品信息"标题 (外层 SectionPanel 已有区标题)
+        # ===== 标题区: 大标题 + 摘要行 + 状态 (有作品时才显示) =====
         self._title_label = QLabel("")
-        self._title_label.setVisible(False)
-        self._header.addWidget(self._title_label)
+        self._title_label.setWordWrap(True)
+        self._title_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self._title_label.setStyleSheet(
+            "color: #e2e8f0; font-size: 15px; font-weight: bold;"
+            " background: transparent; border: none;")
+        self._subtitle = QLabel("")
+        self._subtitle.setWordWrap(True)
+        self._subtitle.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self._subtitle.setStyleSheet(
+            "color: #94a3b8; font-size: 12px;"
+            " background: transparent; border: none;")
         self._state = QLabel("")
         self._state.setStyleSheet(
             "color: #22c55e; font-weight: bold;"
             " background: transparent; border: none;")
-        self._header.addWidget(self._state)
-        self._header.addStretch()
-        self._title_label.setVisible(False)
         self._header_wrapped = QWidget()
-        self._header_wrapped.setLayout(self._header)
+        _hl = QVBoxLayout(self._header_wrapped)
+        _hl.setContentsMargins(0, 0, 0, 0)
+        _hl.setSpacing(3)
+        _hl.addWidget(self._title_label)
+        _hl.addWidget(self._subtitle)
+        _hl.addWidget(self._state)
         outer.addWidget(self._header_wrapped)
 
         # ===== 主体: 左侧封面 + 右侧资料 (内部均无边框) =====
@@ -65,7 +72,7 @@ class VideoInfoWidget(QFrame):
 
         # ---- 左: 封面 (无边框/无背景) ----
         self._cover = CoverLabel("")
-        self._cover.setFixedSize(280, 360)
+        self._cover.setFixedSize(260, 340)
         self._cover.setStyleSheet("background: transparent; border: none;")
         self._body.addWidget(self._cover, 0, Qt.AlignTop)
 
@@ -137,10 +144,46 @@ class VideoInfoWidget(QFrame):
         """当前封面地址 (无封面时为空串)。"""
         return self._cur_url
 
+    @staticmethod
+    def _num(v) -> str:
+        try:
+            n = int(v or 0)
+        except (TypeError, ValueError):
+            return "0"
+        if n >= 100000000:
+            return f"{n / 100000000:.1f}亿"
+        if n >= 10000:
+            return f"{n / 10000:.1f}万"
+        return str(n)
+
     def show_work(self, work):
         self._work = work or {}
-        self._state.setText("✓ " + (work.get("title") or "")[:50])
+        # 大标题 (完整, 可选中复制)
+        title = (work.get("title") or work.get("desc") or "").strip()
+        self._title_label.setText(title or "未命名作品")
         self._title_label.setVisible(True)
+        # 摘要行: 作者 · 时长 · 统计
+        parts = []
+        author = work.get("author_name") or ""
+        if author:
+            parts.append(f"作者 {author}")
+        dur = work.get("duration") or 0
+        try:
+            dur = int(dur)
+            if dur > 10000:
+                dur //= 1000
+        except (TypeError, ValueError):
+            dur = 0
+        if dur:
+            parts.append(f"时长 {dur}s")
+        for key, label in (("digg_count", "赞"), ("comment_count", "评"),
+                           ("view_count", "播放")):
+            v = work.get(key)
+            if v not in (None, "", 0, "0"):
+                parts.append(f"{label} {self._num(v)}")
+        self._subtitle.setText(" · ".join(parts))
+        self._subtitle.setVisible(bool(parts))
+        self._state.setText("✓ 已解析")
         self._state.setStyleSheet("color: #22c55e; font-weight: bold;"
                                   " background: transparent; border: none;")
         cover_url = (work.get("cover_url") or work.get("cover")
@@ -183,6 +226,7 @@ class VideoInfoWidget(QFrame):
         """空状态: 整个大框内什么都不显示, 仅保留框本身。"""
         self._work = {}
         self._title_label.setVisible(False)
+        self._subtitle.setVisible(False)
         self._state.setText("")
         self._detail_scroll.setVisible(False)
         self._info.setVisible(False)
@@ -198,6 +242,7 @@ class VideoInfoWidget(QFrame):
     def show_error(self, msg):
         """错误状态: 不显示任何错误文字, 错误信息走日志。"""
         self._title_label.setVisible(False)
+        self._subtitle.setVisible(False)
         self._state.setText("")
         self._info.setVisible(False)
         self._detail_scroll.setVisible(False)

@@ -35,6 +35,7 @@ from shared.core import (
 from platforms import load_all_platforms
 from .screens import (
     BatchSelectScreen, DataTableScreen, LoginScreen, SettingsScreen,
+    TaskScreen,
 )
 
 APP_VERSION_LABEL = "TUI"
@@ -103,6 +104,8 @@ class TuiApp(App):
         self._norm_work: dict = {}
         self._current_user: dict = {}
         self._task_guard: set = set()
+        self._task_screen = None
+        self._task_result_set = False
         self._stop_event = threading.Event()
 
     # ---------------- 布局 ----------------
@@ -218,6 +221,23 @@ class TuiApp(App):
         except Exception:
             pass
 
+    def _set_work(self, text: str) -> None:
+        """更新作品信息框 (解析预览按钮下方)。"""
+        try:
+            self.query_one("#work-info", Static).update(text)
+        except Exception:
+            pass
+
+    def _finish_task(self, ok: bool, msg: str) -> None:
+        """结果写入状态行 + 任务弹窗。"""
+        self._task_result_set = True
+        if self._task_screen:
+            try:
+                self._task_screen.set_result(ok, msg)
+            except Exception:
+                pass
+        self._set_info(("✓ " if ok else "✗ ") + str(msg))
+
     # ---------------- 事件 ----------------
     def on_button_pressed(self, event: Button.Pressed) -> None:
         try:
@@ -257,19 +277,34 @@ class TuiApp(App):
 
     # ---------------- 后台任务 ----------------
     def _run_task(self, coro, on_done=None, name="task",
-                  guard_key: str = "") -> None:
+                  guard_key: str = "", popup: bool = True) -> None:
         if guard_key and guard_key in self._task_guard:
             self._set_info(f"⚠ [{name}] 已在执行中 (x 可停止)")
             coro.close()
             return
         if guard_key:
             self._task_guard.add(guard_key)
+        # 任务弹窗 (与批量下载弹窗同风格)
+        if popup:
+            try:
+                scr = TaskScreen(name)
+                self._task_screen = scr
+                self._task_result_set = False
+
+                def _clear(_r=None, _s=scr):
+                    if self._task_screen is _s:
+                        self._task_screen = None
+                self.push_screen(scr, _clear)
+            except Exception:
+                self._task_screen = None
 
         async def _wrapped():
+            ok, msg = True, "完成"
             try:
                 result = await coro
             except Exception as e:
-                self._set_info(f"✗ {name} 失败: {type(e).__name__}: {e}")
+                ok, msg = False, f"{type(e).__name__}: {e}"
+                self._set_info(f"✗ {name} 失败: {msg}")
                 result = None
             finally:
                 if guard_key:
@@ -278,10 +313,26 @@ class TuiApp(App):
                 try:
                     on_done(result)
                 except Exception as e:
+                    ok, msg = False, f"回调异常: {e}"
                     self._set_info(f"✗ 回调异常: {e}")
+            if self._task_screen and not self._task_result_set:
+                try:
+                    self._task_screen.set_result(ok, msg)
+                except Exception:
+                    pass
 
         self.run_worker(_wrapped(), exclusive=False, group="task",
                         description=name)
+
+    def _task_log(self, msg: str) -> None:
+        """任务日志 → 弹窗 (无弹窗时走状态行)。"""
+        if self._task_screen:
+            try:
+                self._task_screen.append_log(str(msg))
+                return
+            except Exception:
+                pass
+        self._set_info(str(msg))
 
     def action_stop_task(self) -> None:
         self._stop_event.set()
@@ -322,10 +373,10 @@ class TuiApp(App):
 
     def _open_table(self, title: str, headers: list, rows: list) -> None:
         if not rows:
-            self._set_info(f"⚠ {title}: 没有数据")
+            self._finish_task(False, f"{title}: 没有数据")
             return
         self.push_screen(DataTableScreen(title, headers, rows))
-        self._set_info(f"✓ {title}: {len(rows)} 行 (Esc 关闭表格)")
+        self._finish_task(True, f"{title}: {len(rows)} 行 (Esc 关闭表格)")
 
     # ---------------- 解析预览 ----------------
     def action_preview(self) -> None:
@@ -366,7 +417,7 @@ class TuiApp(App):
 
         def _done(work):
             if not work:
-                self._set_info("✗ 解析失败: 未获取到作品资料")
+                self._finish_task(False, "解析失败: 未获取到作品资料")
                 return
             from shared.core import norm_work
             self._work = work
@@ -376,9 +427,12 @@ class TuiApp(App):
             n_img = (len(imgs) if isinstance(imgs, list)
                      else 1 if isinstance(imgs, str) and "http" in imgs else 0)
             kind = (f"图集 {n_img} 张" if media == "images" else "视频")
-            title = (work.get("title") or work.get("desc") or "")[:60]
-            self._set_info(
-                f"✓ [{kind}] {title}  (作者: {work.get('author_name', '?')})")
+            title = (work.get("title") or work.get("desc") or "").strip()
+            author = work.get("author_name") or "?"
+            # 更新作品信息框 (解析按钮下方)
+            self._set_work(
+                f"[{kind}] {title[:90] or '未命名'}\n作者: {author}")
+            self._finish_task(True, f"解析成功 [{kind}] {(title or '')[:50]}")
 
         self._run_task(_do(), _done, "解析预览", guard_key="preview")
 
@@ -404,26 +458,29 @@ class TuiApp(App):
         async def _do():
             return await PlatformBus.run(
                 self._platform, feature_id, self._current_url,
-                cookie, save_dir,
+                cookie, save_dir, on_log=self._task_log,
                 selected=selected, stop_event=self._stop_event)
 
         def _done(result):
             if result is None:
                 return
+            for line in (result.log or [])[-20:]:
+                self._task_log(line)
             if result.preview == "batch" and result.data:
                 self._open_batch_select(result.message, result.data, feature_id)
                 return
-            status = "✓" if result.success else "✗"
             msg = result.message
             if result.files:
                 msg += f" (保存 {len(result.files)} 个文件)"
-            self._set_info(f"{status} {msg}")
             if result.data and feature_id in _DOWNLOAD_FEATURES \
                     and not result.preview:
                 from shared.core import norm_work
                 d0 = result.data[0]
                 self._work = d0
                 self._norm_work = norm_work(d0, self._platform)
+                title = (d0.get("title") or "")[:60]
+                self._set_work(f"[已下载] {title or '作品'}")
+            self._finish_task(result.success, msg)
             self._refresh_status()
 
         self._run_task(_do(), _done, f"功能 {feature_id}",
@@ -495,7 +552,9 @@ class TuiApp(App):
 
         def _done(path):
             if path:
-                self._set_info(f"✓ {prefix}已保存: {path}")
+                self._finish_task(True, f"{prefix}已保存: {path}")
+            else:
+                self._finish_task(False, f"{prefix}下载失败")
 
         self._run_task(_do(), _done, f"{prefix}下载", guard_key=prefix)
 
@@ -641,7 +700,8 @@ class TuiApp(App):
                 return
             self._download_image(url, "avatars", "头像")
 
-        self._run_task(_do(), _done, "头像地址", guard_key="avatar-addr")
+        self._run_task(_do(), _done, "头像地址", guard_key="avatar-addr",
+                       popup=False)
 
     def _act_open_home(self) -> None:
         sec = self._sec_uid()
@@ -669,7 +729,8 @@ class TuiApp(App):
             if u:
                 self._set_info(f"✓ 当前用户: {u.get('nickname', '?')}")
 
-        self._run_task(_do(), _done, "当前用户", guard_key="user")
+        self._run_task(_do(), _done, "当前用户", guard_key="user",
+                       popup=False)
 
     # ---------------- 系统 ----------------
     def action_open_login(self) -> None:

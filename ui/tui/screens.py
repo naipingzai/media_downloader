@@ -399,3 +399,57 @@ class DataTableScreen(ModalScreen):
 
     def action_dismiss_screen(self) -> None:
         self.dismiss(None)
+
+
+# ===================== 任务执行弹窗 (与批量下载同风格) =====================
+
+class TaskScreen(ModalScreen):
+    """任务执行弹窗 — 进度日志 + 结果。"""
+
+    BINDINGS = [("escape", "dismiss_screen", "关闭")]
+    DEFAULT_CSS = """
+    TaskScreen { align: center middle; }
+    #task-dlg { width: 88; height: 26; border: round $primary;
+                background: $surface; padding: 1 2; }
+    #task-title { text-style: bold; margin-bottom: 1; }
+    #task-log { height: 1fr; border: round $panel; }
+    #task-status { height: auto; margin-top: 1; color: $text-muted; }
+    #task-actions { height: auto; align-horizontal: right; margin-top: 1; }
+    """
+
+    def __init__(self, title: str):
+        super().__init__()
+        self.title_text = title
+
+    def compose(self):
+        from textual.widgets import RichLog
+        with Vertical(id="task-dlg"):
+            yield Label(f"⏳ {self.title_text}", id="task-title")
+            yield RichLog(id="task-log", wrap=True, markup=False,
+                          highlight=False)
+            yield Static("执行中...", id="task-status")
+            with Horizontal(id="task-actions"):
+                yield Button("关闭", id="btn-task-close")
+
+    def append_log(self, line: str):
+        from textual.widgets import RichLog
+        try:
+            self.query_one("#task-log", RichLog).write(str(line))
+        except Exception:
+            pass
+
+    def set_result(self, ok: bool, msg: str):
+        try:
+            self.query_one("#task-status", Static).update(
+                ("✓ " if ok else "✗ ") + str(msg))
+            self.query_one("#task-title", Label).update(
+                ("✅ " if ok else "❌ ") + self.title_text)
+        except Exception:
+            pass
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn-task-close":
+            self.dismiss(True)
+
+    def action_dismiss_screen(self) -> None:
+        self.dismiss(True)
