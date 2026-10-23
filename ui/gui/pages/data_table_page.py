@@ -1,12 +1,10 @@
-"""内嵌数据表格页 —— 替代 DataTableDialog。
-
-显示评论 / 搜索结果 / 热榜 / 账号资料 等任意 dict / list 结构数据。
-"""
+"""内嵌数据表格页 —— 评论/搜索结果等任意数据 (继承 ListPageBase 公共设计)。"""
 from __future__ import annotations
+
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
-)
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel
+
+from .base_page import ListPageBase
 
 
 class _Row(QFrame):
@@ -28,59 +26,38 @@ class _Row(QFrame):
             cell = QLabel(str(text))
             cell.setWordWrap(True)
             cell.setTextInteractionFlags(Qt.TextSelectableByMouse)
-            cell.setStyleSheet(
-                "color: #cbd5e1; font-size: 14px;")
+            cell.setStyleSheet("color: #cbd5e1; font-size: 14px;")
             w = (weights[i] if weights and i < len(weights) else 1)
             lay.addWidget(cell, w)
 
 
-class DataTablePage(QWidget):
+class DataTablePage(ListPageBase):
     """通用数据表格内嵌页。"""
 
     def __init__(self, title: str = "数据", parent=None):
-        super().__init__(parent)
+        super().__init__(title=title, parent=parent)
         self._weights: list | None = None
-        root = QVBoxLayout(self)
-        root.setContentsMargins(12, 10, 12, 10)
-        root.setSpacing(8)
-
-        hdr = QHBoxLayout()
-        self._title = QLabel(title)
-        self._title.setObjectName("PageTitle")
-        hdr.addWidget(self._title)
-        hdr.addStretch()
-        self._count = QLabel("")
-        self._count.setObjectName("PageStatus")
-        hdr.addWidget(self._count)
-        root.addLayout(hdr)
-
-        # 表头
-        self._header = QWidget()
-        self._header_lay = QHBoxLayout(self._header)
-        self._header_lay.setContentsMargins(12, 6, 12, 6)
-        self._header_lay.setSpacing(12)
-        root.addWidget(self._header)
-
-        # 行
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QScrollArea.NoFrame)
-        container = QWidget()
-        self._rows_lay = QVBoxLayout(container)
-        self._rows_lay.setContentsMargins(0, 0, 0, 0)
-        self._rows_lay.setSpacing(6)
-        self._rows_lay.addStretch()
-        scroll.setWidget(container)
-        root.addWidget(scroll, 1)
+        # 表头 (固定在内容区顶部)
+        self._header = QHBoxLayout()
+        self._header.setContentsMargins(12, 6, 12, 6)
+        self._header.setSpacing(12)
+        hdr_w = QFrame()
+        hdr_w.setObjectName("TableHeader")
+        hdr_w.setStyleSheet(
+            "QFrame#TableHeader { background: #0f172a;"
+            " border: 1px solid #334155; border-radius: 6px; }"
+            "QLabel { background: transparent; border: none; }")
+        hdr_w.setLayout(self._header)
+        self.add_content(hdr_w)
 
     def set_rows(self, headers: list, rows: list,
                  weights: list | None = None, title: str | None = None):
         if title is not None:
-            self._title.setText(title)
+            self.set_title(title)
         self._weights = weights
         # 表头
-        while self._header_lay.count():
-            it = self._header_lay.takeAt(0)
+        while self._header.count():
+            it = self._header.takeAt(0)
             w = it.widget()
             if w:
                 w.deleteLater()
@@ -89,16 +66,15 @@ class DataTablePage(QWidget):
             lbl.setStyleSheet(
                 "color: #38bdf8; font-size: 14px; font-weight: bold;")
             wgt = (weights[i] if weights and i < len(weights) else 1)
-            self._header_lay.addWidget(lbl, wgt)
-        # 行
-        while self._rows_lay.count():
-            it = self._rows_lay.takeAt(0)
+            self._header.addWidget(lbl, wgt)
+        # 行 (先清掉旧行, 保留表头控件)
+        for i in range(self._content.count() - 1, 0, -1):
+            it = self._content.itemAt(i)
             w = it.widget()
-            if w:
+            if w and w.objectName() != "TableHeader":
+                self._content.takeAt(i)
                 w.deleteLater()
-        self._rows_lay.addStretch()
         for i, cells in enumerate(rows):
-            self._rows_lay.insertWidget(
-                self._rows_lay.count() - 1,
-                _Row(list(cells), odd=(i % 2 == 1), weights=weights))
-        self._count.setText(f"共 {len(rows)} 条")
+            self.add_content(_Row(list(cells), odd=(i % 2 == 1),
+                                  weights=weights))
+        self.set_count(f"共 {len(rows)} 条")

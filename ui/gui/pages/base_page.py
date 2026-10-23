@@ -1,0 +1,106 @@
+"""列表内嵌页公共基类 —— WorkGridPage / UsersPage / DataTablePage 共用。
+
+统一设计:
+  ┌────────────────────────────────────────┐
+  │ 标题                    共 N 条  [按钮]│ ← 页头 (统一)
+  ├────────────────────────────────────────┤
+  │                                        │
+  │   内容区 (仅纵向滚动, 无横向滚动)        │ ← 子类填充
+  │                                        │
+  └────────────────────────────────────────┘
+"""
+from __future__ import annotations
+
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QHBoxLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget,
+)
+
+
+class ListPageBase(QWidget):
+    """列表内嵌页基类 —— 页头/滚动区/页脚统一, 子类只填内容。"""
+
+    def __init__(self, title: str = "", parent=None):
+        super().__init__(parent)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(12, 10, 12, 10)
+        root.setSpacing(8)
+
+        # ---- 页头: 标题 | 计数 | 右侧按钮区 ----
+        hdr = QHBoxLayout()
+        hdr.setSpacing(8)
+        self._title_label = QLabel(title)
+        self._title_label.setObjectName("PageTitle")
+        hdr.addWidget(self._title_label)
+        hdr.addStretch()
+        self._count_label = QLabel("")
+        self._count_label.setObjectName("PageStatus")
+        hdr.addWidget(self._count_label)
+        self._header_actions = QHBoxLayout()
+        self._header_actions.setSpacing(8)
+        hdr.addLayout(self._header_actions)
+        root.addLayout(hdr)
+
+        # ---- 内容区: 仅纵向滚动 ----
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setFrameShape(QScrollArea.NoFrame)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._container = QWidget()
+        self._content = QVBoxLayout(self._container)
+        self._content.setContentsMargins(0, 0, 0, 0)
+        self._content.setSpacing(6)
+        self._content.addStretch()
+        self._scroll.setWidget(self._container)
+        root.addWidget(self._scroll, 1)
+
+        # ---- 页脚: 状态 | 按钮区 ----
+        self._footer = QHBoxLayout()
+        self._footer.setSpacing(8)
+        self._status_label = QLabel("")
+        self._status_label.setObjectName("PageStatus")
+        self._footer.addWidget(self._status_label)
+        self._footer.addStretch()
+        self._footer_actions = QHBoxLayout()
+        self._footer_actions.setSpacing(8)
+        self._footer.addLayout(self._footer_actions)
+        root.addLayout(self._footer)
+
+    # ---------- 子类辅助 ----------
+    def set_title(self, text: str):
+        self._title_label.setText(text)
+
+    def set_count(self, text: str):
+        self._count_label.setText(text)
+
+    def set_status(self, text: str):
+        self._status_label.setText(text)
+
+    def add_header_button(self, text: str, slot) -> QPushButton:
+        return self._add_button(self._header_actions, text, slot)
+
+    def add_footer_button(self, text: str, slot,
+                          primary: bool = False) -> QPushButton:
+        return self._add_button(self._footer_actions, text, slot, primary)
+
+    @staticmethod
+    def _add_button(layout, text, slot, primary: bool = False) -> QPushButton:
+        b = QPushButton(text)
+        b.setObjectName("PagePrimaryButton" if primary else "PageGhostButton")
+        b.setCursor(Qt.PointingHandCursor)
+        b.clicked.connect(slot)
+        layout.addWidget(b)
+        return b
+
+    def clear_content(self):
+        """清空内容区 (保留尾部 stretch)。"""
+        while self._content.count():
+            it = self._content.takeAt(0)
+            w = it.widget()
+            if w:
+                w.deleteLater()
+        self._content.addStretch()
+
+    def add_content(self, widget: QWidget):
+        """在内容区追加子控件 (插到尾部 stretch 之前)。"""
+        self._content.insertWidget(self._content.count() - 1, widget)
