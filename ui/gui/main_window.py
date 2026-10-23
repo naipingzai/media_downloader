@@ -786,6 +786,11 @@ class MainWindow(QMainWindow):
         self._data_win.open()
 
     def _open_works_page(self, title: str, items: list[dict]):
+        """作品列表页 (统一入口: 所有作品/收藏/批量预览 经 norm_work 归一化)。"""
+        from shared.core import norm_work
+        items = [{**norm_work(it, it.get("platform", "") or self._current_platform),
+                  **{k: v for k, v in (it or {}).items() if v not in (None, "")}}
+                 for it in (items or [])]
         if not items:
             self._log.append(f"⚠ {title}: 没有数据", "#f59e0b")
             return
