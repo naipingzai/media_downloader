@@ -1,14 +1,12 @@
-"""内嵌用户表格页 —— 替代 UserTableDialog。
-
-显示关注列表 / 收藏用户: 圆头像 + 昵称 + ID + 粉丝 + 签名。
-"""
+"""内嵌用户列表页 —— 关注列表/收藏用户 (继承 ListPageBase 公共设计)。"""
 from __future__ import annotations
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPainter, QPainterPath, QPixmap
-from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
-)
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
+
 from ..cover_loader import CoverLoader
+from .base_page import ListPageBase
 
 
 def _fmt(n) -> str:
@@ -53,8 +51,6 @@ class _UserRow(QFrame):
         lay = QHBoxLayout(self)
         lay.setContentsMargins(10, 8, 10, 8)
         lay.setSpacing(12)
-
-        # 头像
         self._avatar = QLabel()
         self._avatar.setFixedSize(40, 40)
         self._avatar.setAlignment(Qt.AlignCenter)
@@ -70,8 +66,6 @@ class _UserRow(QFrame):
             if cached is not None and not cached.isNull():
                 self._on_avatar_ready(self._avatar_url, cached)
         lay.addWidget(self._avatar, 0, Qt.AlignVCenter)
-
-        # 信息
         info = QVBoxLayout()
         info.setSpacing(2)
         top = QHBoxLayout()
@@ -83,8 +77,7 @@ class _UserRow(QFrame):
         uid = user.get("user_id") or user.get("sec_user_id") or ""
         if uid:
             uid_lbl = QLabel(f"ID: {uid[:24]}")
-            uid_lbl.setStyleSheet(
-                "color: #64748b; font-size: 12px;")
+            uid_lbl.setStyleSheet("color: #64748b; font-size: 12px;")
             top.addWidget(uid_lbl)
         top.addStretch()
         fans = QLabel(f"粉丝 {_fmt(user.get('follower_count', 0))}")
@@ -103,39 +96,16 @@ class _UserRow(QFrame):
             self._avatar.setPixmap(_rounded_pixmap(pix, size=40))
 
 
-class UsersPage(QWidget):
-    """用户列表内嵌页 (关注列表 / 收藏等)。"""
+class UsersPage(ListPageBase):
+    """用户列表内嵌页 (关注列表/收藏等)。"""
 
     def __init__(self, title: str = "用户列表", parent=None):
-        super().__init__(parent)
-        root = QVBoxLayout(self)
-        root.setContentsMargins(12, 10, 12, 10)
-        root.setSpacing(8)
+        super().__init__(title=title, parent=parent)
 
-        self._title_label = QLabel(title)
-        self._title_label.setObjectName("PageTitle")
-        root.addWidget(self._title_label)
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QScrollArea.NoFrame)
-        container = QWidget()
-        self._v = QVBoxLayout(container)
-        self._v.setContentsMargins(0, 0, 0, 0)
-        self._v.setSpacing(6)
-        self._v.addStretch()
-        scroll.setWidget(container)
-        root.addWidget(scroll, 1)
-
-    def set_users(self, users: list[dict], title: str | None = None):
+    def set_users(self, users: list, title: str | None = None):
         if title is not None:
-            self._title_label.setText(f"{title} · 共 {len(users)} 人")
-        while self._v.count():
-            it = self._v.takeAt(0)
-            w = it.widget()
-            if w:
-                w.deleteLater()
-        self._v.addStretch()
+            self.set_title(f"{title} · 共 {len(users)} 人")
+        self.clear_content()
         for i, u in enumerate(users):
-            self._v.insertWidget(self._v.count() - 1,
-                                 _UserRow(u, odd=(i % 2 == 1)))
+            self.add_content(_UserRow(u, odd=(i % 2 == 1)))
+        self.set_count(f"共 {len(users)} 人")

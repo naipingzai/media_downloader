@@ -1,22 +1,21 @@
-"""内嵌作品网格页 —— 替代 WorkGridDialog。
-
-显示纵向卡片 (封面 → 描述 → 链接), 一行 3 个, 可勾选 → 触发「下载所选」回调。
-"""
+"""内嵌作品网格页 —— 作品卡片网格 + 勾选下载 (继承 ListPageBase 公共设计)。"""
 from __future__ import annotations
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
-    QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QVBoxLayout, QWidget,
+    QFrame, QGridLayout, QLabel, QVBoxLayout, QWidget,
 )
+
+from ..cover_loader import CoverLoader
 from ..widgets.cover_label import CoverLabel
 from ..widgets.work_card import InfoRow, build_work_rows
-from ..cover_loader import CoverLoader
 from shared.core import norm_work
+from .base_page import ListPageBase
 
 
 class _VerticalCard(QFrame):
-    """单张作品卡: 封面 + 描述 + 链接。点击切换勾选。"""
+    """单张作品卡 (统一布局): 封面 + 标题 + 标准信息行。点击切换勾选。"""
 
     def __init__(self, work: dict, parent=None):
         super().__init__(parent)
@@ -29,10 +28,11 @@ class _VerticalCard(QFrame):
         self._cover_url = (work.get("cover_url") or work.get("cover")
                            or work.get("pic") or "")
         self._refresh_style()
+
         lay = QVBoxLayout(self)
         lay.setContentsMargins(10, 10, 10, 10)
         lay.setSpacing(6)
-        # 封面
+
         self._cover = CoverLabel("封面")
         self._cover.setMinimumSize(230, 155)
         if self._cover_url:
@@ -42,7 +42,7 @@ class _VerticalCard(QFrame):
             if cached is not None:
                 self._cover.set_source_pixmap(cached)
         lay.addWidget(self._cover)
-        # 标题 (统一布局: 完整可选中)
+
         desc = (work.get("title") or work.get("desc") or "(无描述)").strip()
         desc_lbl = QLabel(desc)
         desc_lbl.setWordWrap(True)
@@ -50,7 +50,7 @@ class _VerticalCard(QFrame):
         desc_lbl.setStyleSheet("color: #e2e8f0; font-weight: bold;"
                                " font-size: 14px;")
         lay.addWidget(desc_lbl)
-        # 标准信息行 (与作品资料卡 InfoRow 一致)
+
         for label, value in build_work_rows(work)[:5]:
             lay.addWidget(InfoRow(label, value))
 
@@ -79,73 +79,32 @@ class _VerticalCard(QFrame):
             "QLabel { background: transparent; border: none;"
             " color: #e2e8f0; font-size: 14px; }")
 
-    def mousePressEvent(self, ev):
-        if ev.button() == Qt.LeftButton:
-            self.set_checked(not self._checked)
-        super().mousePressEvent(ev)
 
+class WorkGridPage(ListPageBase):
+    """作品网格内嵌页 —— 卡片 + 勾选 + 批量下载。"""
 
-class WorkGridPage(QWidget):
-    """作品网格内嵌页。"""
-    download_requested = Signal(list)  # 选中的 work_id 列表
-
+    download_requested = Signal(list)
     COLS = 3
 
     def __init__(self, parent=None):
-        super().__init__(parent)
-        self._cards: list[_VerticalCard] = []
-        self._items: list[dict] = []
-        root = QVBoxLayout(self)
-        root.setContentsMargins(12, 10, 12, 10)
-        root.setSpacing(8)
-
-        # 顶部标题
-        hdr = QHBoxLayout()
-        self._title_label = QLabel("")
-        self._title_label.setObjectName("PageTitle")
-        hdr.addWidget(self._title_label)
-        hdr.addStretch()
-        root.addLayout(hdr)
-
-        # 滚动网格
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QScrollArea.NoFrame)
-        container = QWidget()
-        self._grid = QGridLayout(container)
+        super().__init__(title="", parent=parent)
+        self._cards: list = []
+        self._items: list = []
+        self._grid_widget = QWidget()
+        self._grid = QGridLayout(self._grid_widget)
         self._grid.setSpacing(10)
         self._grid.setContentsMargins(2, 2, 2, 2)
         for i in range(self.COLS):
             self._grid.setColumnStretch(i, 1)
-        scroll.setWidget(container)
-        root.addWidget(scroll, 1)
-
-        # 底部按钮
-        bottom = QHBoxLayout()
-        bottom.setSpacing(8)
-        self._status_label = QLabel("就绪")
-        self._status_label.setObjectName("PageStatus")
-        bottom.addWidget(self._status_label)
-        bottom.addStretch()
-        for text, slot in (("全选", lambda: self._check_all(True)),
-                           ("全不选", lambda: self._check_all(False)),
-                           ("反选", self._invert)):
-            b = QPushButton(text)
-            b.setObjectName("PageGhostButton")
-            b.setCursor(Qt.PointingHandCursor)
-            b.clicked.connect(slot)
-            bottom.addWidget(b)
-        self._dl_btn = QPushButton("下载所选 (0)")
-        self._dl_btn.setObjectName("PagePrimaryButton")
-        self._dl_btn.setCursor(Qt.PointingHandCursor)
+        self.add_content(self._grid_widget)
+        self.add_footer_button("全选", lambda: self._check_all(True))
+        self.add_footer_button("全不选", lambda: self._check_all(False))
+        self.add_footer_button("反选", self._invert)
+        self._dl_btn = self.add_footer_button(
+            "下载所选 (0)", self._on_download, primary=True)
         self._dl_btn.setEnabled(False)
-        self._dl_btn.clicked.connect(self._on_download)
-        bottom.addWidget(self._dl_btn)
-        root.addLayout(bottom)
 
-    def set_works(self, items: list[dict], title: str = "作品列表"):
-        """填充作品网格。"""
-        # 清空
+    def set_works(self, items: list, title: str = "作品列表"):
         while self._grid.count():
             it = self._grid.takeAt(0)
             w = it.widget()
@@ -158,7 +117,7 @@ class WorkGridPage(QWidget):
             card = _VerticalCard(work)
             self._cards.append(card)
             self._grid.addWidget(card, i // self.COLS, i % self.COLS)
-        self._title_label.setText(f"{title} · 共 {len(items)} 项")
+        self.set_title(f"{title} · 共 {len(items)} 项")
         self._refresh_count()
 
     def _check_all(self, state: bool):
@@ -175,9 +134,9 @@ class WorkGridPage(QWidget):
         n_sel = sum(1 for c in self._cards if c.is_checked)
         self._dl_btn.setText(f"下载所选 ({n_sel})")
         self._dl_btn.setEnabled(n_sel > 0)
-        self._status_label.setText(f"已选 {n_sel} / {len(self._cards)}")
+        self.set_status(f"已选 {n_sel} / {len(self._cards)}")
 
-    def selected_ids(self) -> list[str]:
+    def selected_ids(self) -> list:
         return [c.work_id for c in self._cards if c.is_checked]
 
     def _on_download(self):
