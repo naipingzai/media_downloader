@@ -14,7 +14,7 @@ class LoginScreen(ModalScreen):
     BINDINGS = [("escape", "dismiss_screen", "关闭")]
     DEFAULT_CSS = """
     LoginScreen { align: center middle; }
-    #login-dlg { width: 68; height: auto; max-height: 92%;
+    #login-dlg { width: 68; height: auto; max-height: 92%; overflow-x: hidden;
                  border: round $primary; background: $surface; padding: 1 2; }
     #login-title { text-style: bold; margin-bottom: 1; }
     #login-scroll { height: auto; max-height: 26; }
@@ -175,7 +175,7 @@ class SettingsScreen(ModalScreen):
     BINDINGS = [("escape", "dismiss_screen", "关闭")]
     DEFAULT_CSS = """
     SettingsScreen { align: center middle; }
-    #settings-dlg { width: 76; height: auto; max-height: 92%;
+    #settings-dlg { width: 76; height: auto; max-height: 92%; overflow-x: hidden;
                     border: round $primary; background: $surface; padding: 1 2; }
     .set-label { margin-top: 1; }
     .dlg-actions { height: auto; align-horizontal: right; margin-top: 1; }
@@ -283,7 +283,8 @@ class BatchSelectScreen(ModalScreen):
     BatchSelectScreen { align: center middle; }
     #batch-dlg { width: 94%; height: 90%; border: round $primary;
                  background: $surface; padding: 1 2; }
-    #batch-table { height: 1fr; }
+    #batch-table { height: 1fr; scrollbar-size: 0 0; }
+    #batch-table > .datatable--header { text-overflow: ellipsis; }
     #batch-actions { height: auto; align-horizontal: right; margin-top: 1; }
     .dlg-title { text-style: bold; margin-bottom: 1; }
     """
@@ -312,8 +313,8 @@ class BatchSelectScreen(ModalScreen):
         table = self.query_one("#batch-table", DataTable)
         table.add_column("✓", key="check", width=3)
         table.add_column("作品ID", width=20)
-        table.add_column("标题")
-        table.add_column("作者")
+        table.add_column("标题", width=40)
+        table.add_column("作者", width=20)
         for i, it in enumerate(self.items):
             wid = str(it.get("work_id", i))
             table.add_row("☐", wid, (it.get("title") or "")[:50],
@@ -369,7 +370,7 @@ class DataTableScreen(ModalScreen):
     DataTableScreen { align: center middle; }
     #dt-dlg { width: 96%; height: 92%; border: round $primary;
               background: $surface; padding: 1 2; }
-    #dt-table { height: 1fr; }
+    #dt-table { height: 1fr; scrollbar-size: 0 0; }
     .dlg-title { text-style: bold; margin-bottom: 1; }
     """
 
@@ -412,7 +413,7 @@ class TaskScreen(ModalScreen):
     #task-dlg { width: 88; height: 26; border: round $primary;
                 background: $surface; padding: 1 2; }
     #task-title { text-style: bold; margin-bottom: 1; }
-    #task-log { height: 1fr; border: round $panel; }
+    #task-log { height: 1fr; border: round $panel; scrollbar-size: 0 1; }
     #task-status { height: auto; margin-top: 1; color: $text-muted; }
     #task-actions { height: auto; align-horizontal: right; margin-top: 1; }
     """
