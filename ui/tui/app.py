@@ -1,20 +1,24 @@
-"""TUI 精简版 — 仅保留下载功能。
+"""TUI — 终端原生页面, GUI 全部功能。
 
-界面 (极简单列):
-  ┌───────────────────────────────┐
-  │ 平台: [抖音] [B站] [快手] [小红书]│
-  │ 🔗 [链接输入        ] [解析预览] │
-  │ ▶ 当前作品: 标题/类型           │
-  │ ⬇ 下载 | ⬇ 批量下载 | 🔴停止录制│
-  │ 📋 下载功能: 合集/收藏/直播…    │
-  │ [登录] [设置]                  │
-  │ 💬 状态: ...                   │
-  └───────────────────────────────┘
-功能: 解析预览 / 下载作品 / 批量下载(勾选) / 直播录制 / 合集 / 收藏夹
-      不做资料卡、评论、列表、日志面板
+页面 (极简单列, 不模仿 GUI 排版):
+  ┌────────────────────────────────────┐
+  │ 平台: [抖音] [B站] [快手] [小红书]    │
+  │ [链接输入             ] [解析预览]   │
+  │ ▶ 作品: 标题/类型/统计              │
+  │ ⬇下载作品 ⬇批量下载账号 🔴停止录制  │
+  │ 作品操作: 获取链接/查看评论/下载封面  │
+  │ 作者操作: 获取作品/关注/收藏/头像/主页│
+  │ 📋 平台功能: (全部 FeatureMeta)      │
+  │ [登录] [设置]                      │
+  │ 💬 状态: ...                       │
+  └────────────────────────────────────┘
+功能与 GUI 完全一致: 解析/下载/批量/直播录制/合集/收藏夹/
+  获取作品/关注列表/收藏列表/评论/头像/主页/链接/封面
+列表结果用 DataTableScreen 表格展示。
 """
 from __future__ import annotations
 
+import asyncio
 
 import re
 import threading
@@ -29,18 +33,32 @@ from shared.core import (
     platform_name as _pn,
 )
 from platforms import load_all_platforms
-from .screens import BatchSelectScreen, LoginScreen, SettingsScreen
+from .screens import (
+    BatchSelectScreen, DataTableScreen, LoginScreen, SettingsScreen,
+)
 
 APP_VERSION_LABEL = "TUI"
 
-# 只保留下载相关的平台功能
+# 下载类功能 (执行成功后刷新作品信息)
 _DOWNLOAD_FEATURES = {"download", "account", "mix", "series",
                       "collection", "collection_album", "favorite_folder",
                       "live", "tk_download", "ks_download", "xhs_download"}
 
 
+def fmt_count(n) -> str:
+    try:
+        n = int(n or 0)
+    except (TypeError, ValueError):
+        return "0"
+    if n >= 100000000:
+        return f"{n / 100000000:.1f}亿"
+    if n >= 10000:
+        return f"{n / 10000:.1f}万"
+    return str(n)
+
+
 class TuiApp(App):
-    """MediaDownloader TUI — 精简下载工具。"""
+    """MediaDownloader TUI — 终端页面 + GUI 全部功能。"""
 
     TITLE = PROJECT_NAME
     SUB_TITLE = APP_VERSION_LABEL
@@ -63,13 +81,11 @@ class TuiApp(App):
     #link-input { width: 1fr; }
     #work-info { height: auto; margin-bottom: 1; padding: 0 1;
                  border: round $panel; color: $text; }
-    #dl-row { height: 3; margin-bottom: 1; }
-    .dl-btn { margin: 0 1; height: 3; }
+    .act-row { height: 3; margin-bottom: 1; }
+    .act-btn { margin: 0 1; height: 3; }
     #feat-label { text-style: bold; color: $accent; padding: 0 1; }
     #feat-scroll { height: auto; max-height: 16; margin-bottom: 1; }
     .menu-btn { width: 1fr; height: 3; margin: 0 1; }
-    #sys-row { height: 3; margin-bottom: 1; }
-    .sys-btn { margin: 0 1; height: 3; }
     #status-line { height: auto; color: $text-muted; padding: 0 1; }
     #footer-status { dock: bottom; color: $text-muted; padding: 0 1;
                      background: $surface; }
@@ -85,44 +101,52 @@ class TuiApp(App):
         self._current_url = ""
         self._work: dict = {}
         self._norm_work: dict = {}
+        self._current_user: dict = {}
         self._task_guard: set = set()
         self._stop_event = threading.Event()
 
     # ---------------- 布局 ----------------
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
-        # 平台切换
         with Horizontal(id="plat-row"):
             yield Label("平台:", id="plat-label")
             for pid in PlatformBus.list_platforms():
                 yield Button(_pn(pid), id=f"plat-{pid}", classes="plat-btn")
-        # 链接输入
         with Horizontal(id="link-row"):
             yield Input(placeholder="粘贴作品链接/分享文本 → Ctrl+P 解析预览",
                         id="link-input")
             yield Button("解析预览", id="act-preview", variant="primary")
-        # 当前作品信息 (单行文本)
         yield Static("未解析 — 粘贴链接后按 [解析预览]", id="work-info")
-        # 下载按钮行
-        with Horizontal(id="dl-row"):
-            yield Button("⬇ 下载作品", id="act-dl", classes="dl-btn",
+        # 下载主操作
+        with Horizontal(classes="act-row"):
+            yield Button("⬇ 下载作品", id="act-dl", classes="act-btn",
                          variant="success")
-            yield Button("⬇ 批量下载账号", id="act-account", classes="dl-btn")
-            yield Button("🔴 停止录制", id="act-stop", classes="dl-btn",
+            yield Button("⬇ 批量下载账号", id="act-account", classes="act-btn")
+            yield Button("🔴 停止录制", id="act-stop", classes="act-btn",
                          variant="error")
-        # 平台下载功能 (预建按钮, 避免 remove_children/mount 挂起)
-        yield Label("📋 下载功能", id="feat-label")
+        # 作品操作 (对应 GUI 作品操作组)
+        with Horizontal(classes="act-row"):
+            yield Button("🔗 获取链接", id="act-link", classes="act-btn")
+            yield Button("💬 查看评论", id="act-comments", classes="act-btn")
+            yield Button("🖼 下载封面", id="act-cover", classes="act-btn")
+        # 作者操作 (对应 GUI 作者操作组)
+        with Horizontal(classes="act-row"):
+            yield Button("📄 获取作品", id="au-works", classes="act-btn")
+            yield Button("👥 关注列表", id="au-follow", classes="act-btn")
+            yield Button("⭐ 收藏列表", id="au-collect", classes="act-btn")
+            yield Button("🖼 下载头像", id="au-avatar", classes="act-btn")
+            yield Button("🌐 作者主页", id="au-home", classes="act-btn")
+        # 平台功能 (全部 FeatureMeta, 预建按钮)
+        yield Label("📋 平台功能", id="feat-label")
         with VerticalScroll(id="feat-scroll"):
             for i in range(self.MAX_FEATURES):
                 b = Button("", id=f"feat-{i}", classes="menu-btn")
                 b.feature_id = ""  # type: ignore[attr-defined]
                 b.display = False
                 yield b
-        # 系统
-        with Horizontal(id="sys-row"):
-            yield Button("🔑 登录 (l)", id="sys-login", classes="sys-btn")
-            yield Button("⚙ 设置 (s)", id="sys-settings", classes="sys-btn")
-        # 状态行 (结果提示, 非日志)
+        with Horizontal(classes="act-row"):
+            yield Button("🔑 登录 (l)", id="sys-login", classes="act-btn")
+            yield Button("⚙ 设置 (s)", id="sys-settings", classes="act-btn")
         yield Static("", id="status-line")
         yield Label("", id="footer-status")
         yield Footer()
@@ -133,7 +157,7 @@ class TuiApp(App):
         if "douyin" in PlatformBus.list_platforms():
             self._select_platform("douyin")
 
-    # ---------------- 平台切换 (修复闪退: 全部 try/except + 不触发网络) ----------------
+    # ---------------- 平台切换 (预建按钮+属性更新, 不闪退) ----------------
     def _select_platform(self, pid: str) -> None:
         try:
             self._platform = pid
@@ -148,15 +172,17 @@ class TuiApp(App):
             self._refresh_menu()
             self._set_info(f"已切换到 {_pn(pid)} — 粘贴链接后按 [解析预览]")
             self._refresh_status()
+            if self._cm.get(pid):
+                self._load_current_user()
         except Exception as e:
             self._set_info(f"⚠ 切换平台异常: {e}")
 
     def _refresh_menu(self) -> None:
-        """更新下载功能按钮 (仅下载相关) — 纯属性更新, 无 async 挂起。"""
+        """更新平台功能按钮 (全部 FeatureMeta)。"""
         try:
             btns = list(self.query(".menu-btn"))
-            feats = [f for f in PlatformBus.get_features(self._platform)
-                     if f.id in _DOWNLOAD_FEATURES] if self._platform else []
+            feats = list(PlatformBus.get_features(self._platform)) \
+                if self._platform else []
             for i, b in enumerate(btns):
                 if i < len(feats):
                     b.label = feats[i].name
@@ -186,7 +212,6 @@ class TuiApp(App):
         except Exception:
             pass
 
-    # ---------------- 状态行 (替代日志面板) ----------------
     def _set_info(self, msg: str) -> None:
         try:
             self.query_one("#status-line", Static).update(msg)
@@ -210,6 +235,14 @@ class TuiApp(App):
                 "act-dl": lambda: self.action_execute("download"),
                 "act-account": lambda: self.action_execute("account"),
                 "act-stop": self.action_stop_task,
+                "act-link": self._act_copy_link,
+                "act-comments": self._act_comments,
+                "act-cover": self._act_download_cover,
+                "au-works": self._act_fetch_works,
+                "au-follow": self._act_follow_list,
+                "au-collect": self._act_collect_list,
+                "au-avatar": self._act_download_avatar,
+                "au-home": self._act_open_home,
                 "sys-login": self.action_open_login,
                 "sys-settings": self.action_open_settings,
             }.get(bid)
@@ -254,6 +287,46 @@ class TuiApp(App):
         self._stop_event.set()
         self._set_info("■ 已请求停止录制/任务")
 
+    # ---------------- 基础辅助 ----------------
+    def _adapter(self):
+        from shared.core.adapter import PlatformConfig
+        from platforms import get_platform
+        cls = get_platform(self._platform)
+        return cls(config=PlatformConfig(
+            name=self._platform, display_name=self._platform,
+            domains=[], cookie=self._cm.get(self._platform)))
+
+    async def _fetch_current_user(self) -> dict:
+        """获取当前登录用户 (内部用)。"""
+        if self._current_user:
+            return self._current_user
+        a = self._adapter()
+        try:
+            u = None
+            if hasattr(a, "fetch_current_user"):
+                u = await a.fetch_current_user()
+            if u:
+                self._current_user = u
+            return u or {}
+        finally:
+            await a.close()
+
+    def _sec_uid(self) -> str:
+        """作品作者 sec_uid, 回退当前登录用户。"""
+        for src in (self._work, self._current_user):
+            sec = (src.get("sec_user_id") or src.get("sec_uid")
+                   or src.get("user_id") or "")
+            if sec:
+                return sec
+        return ""
+
+    def _open_table(self, title: str, headers: list, rows: list) -> None:
+        if not rows:
+            self._set_info(f"⚠ {title}: 没有数据")
+            return
+        self.push_screen(DataTableScreen(title, headers, rows))
+        self._set_info(f"✓ {title}: {len(rows)} 行 (Esc 关闭表格)")
+
     # ---------------- 解析预览 ----------------
     def action_preview(self) -> None:
         if not self._platform:
@@ -277,8 +350,6 @@ class TuiApp(App):
         async def _do():
             from shared.core.session import create_async_client
             from shared.flow.link import LinkExtractor
-            from shared.core.adapter import PlatformConfig
-            from platforms import get_platform
             client = create_async_client()
             try:
                 links = await LinkExtractor(client).run(url, self._platform)
@@ -286,10 +357,7 @@ class TuiApp(App):
                 await client.close()
             if not links:
                 return None
-            cls = get_platform(self._platform)
-            a = cls(config=PlatformConfig(
-                name=self._platform, display_name=self._platform,
-                domains=[], cookie=self._cm.get(self._platform)))
+            a = self._adapter()
             try:
                 raw_detail = await a.request_detail(links[0])
                 return a.parse_detail(raw_detail) if raw_detail else None
@@ -304,19 +372,17 @@ class TuiApp(App):
             self._work = work
             self._norm_work = norm_work(work, self._platform)
             media = work.get("media_type") or ""
-            n_img = 0
             imgs = work.get("image_urls")
-            if isinstance(imgs, list):
-                n_img = len(imgs)
-            elif isinstance(imgs, str) and "http" in imgs:
-                n_img = 1
+            n_img = (len(imgs) if isinstance(imgs, list)
+                     else 1 if isinstance(imgs, str) and "http" in imgs else 0)
             kind = (f"图集 {n_img} 张" if media == "images" else "视频")
             title = (work.get("title") or work.get("desc") or "")[:60]
-            self._set_info(f"✓ [{kind}] {title}  (作者: {work.get('author_name', '?')})")
+            self._set_info(
+                f"✓ [{kind}] {title}  (作者: {work.get('author_name', '?')})")
 
         self._run_task(_do(), _done, "解析预览", guard_key="preview")
 
-    # ---------------- 功能执行 ----------------
+    # ---------------- 功能执行 (平台 FeatureMeta) ----------------
     def action_execute(self, feature_id: str) -> None:
         if not self._platform:
             self._set_info("⚠ 请先选择平台")
@@ -344,16 +410,20 @@ class TuiApp(App):
         def _done(result):
             if result is None:
                 return
-            # 批量预览 → 勾选屏
             if result.preview == "batch" and result.data:
                 self._open_batch_select(result.message, result.data, feature_id)
                 return
             status = "✓" if result.success else "✗"
-            n_files = len(result.files or [])
             msg = result.message
-            if n_files:
-                msg += f" (保存 {n_files} 个文件)"
+            if result.files:
+                msg += f" (保存 {len(result.files)} 个文件)"
             self._set_info(f"{status} {msg}")
+            if result.data and feature_id in _DOWNLOAD_FEATURES \
+                    and not result.preview:
+                from shared.core import norm_work
+                d0 = result.data[0]
+                self._work = d0
+                self._norm_work = norm_work(d0, self._platform)
             self._refresh_status()
 
         self._run_task(_do(), _done, f"功能 {feature_id}",
@@ -366,6 +436,240 @@ class TuiApp(App):
                 self._set_info(f"✓ 已勾选 {len(selected)} 项, 开始下载...")
                 self._run_feature(feature_id, selected)
         self.push_screen(BatchSelectScreen(title, items), _cb)
+
+    # ---------------- 作品操作 (对应 GUI 作品操作组) ----------------
+    def _act_copy_link(self) -> None:
+        url = (self._work.get("share_url")
+               or self._norm_work.get("share_url") or "")
+        if url:
+            self._set_info(f"✓ 作品链接: {url}")
+        else:
+            self._set_info("⚠ 无作品链接 (先解析预览)")
+
+    def _act_comments(self) -> None:
+        wid = str(self._work.get("work_id") or "")
+        if not wid:
+            self._set_info("⚠ 无作品ID (先解析预览)")
+            return
+        self._set_info(f"▸ 获取评论: {wid}...")
+
+        async def _do():
+            from shared.core import norm_comment
+            a = self._adapter()
+            try:
+                data = await a.fetch_comments(wid)
+                if isinstance(data, dict):
+                    data = data.get("comments") or data.get("data") or []
+                return [norm_comment(c) for c in (data or [])
+                        if isinstance(c, dict)]
+            finally:
+                await a.close()
+
+        def _done(items):
+            items = [c for c in (items or []) if c.get("content")]
+            self._open_table("评论列表", ["用户", "内容"],
+                             [[c.get("nickname", "—"), c.get("content", "")]
+                              for c in items])
+
+        self._run_task(_do(), _done, "评论", guard_key="comments")
+
+    def _act_download_cover(self) -> None:
+        url = (self._work.get("cover_url")
+               or self._norm_work.get("cover_url") or "")
+        if not url:
+            self._set_info("⚠ 无封面地址 (先解析预览)")
+            return
+        self._download_image(url, "covers", "封面")
+
+    def _download_image(self, url: str, subdir: str, prefix: str) -> None:
+        async def _do():
+            import time
+            from curl_cffi.requests import get as _get
+            r = await asyncio.to_thread(_get, url, timeout=15,
+                                        impersonate="chrome146")
+            d = VOLUME / (self._platform or "common") / subdir
+            d.mkdir(parents=True, exist_ok=True)
+            path = d / f"{prefix}_{int(time.time())}.jpg"
+            path.write_bytes(bytes(r.content))
+            return str(path)
+
+        def _done(path):
+            if path:
+                self._set_info(f"✓ {prefix}已保存: {path}")
+
+        self._run_task(_do(), _done, f"{prefix}下载", guard_key=prefix)
+
+    # ---------------- 作者操作 (对应 GUI 作者操作组) ----------------
+    def _act_fetch_works(self) -> None:
+        sec = self._sec_uid()
+        if not sec:
+            self._set_info("⚠ 未获取到作者 (先解析作品)")
+            return
+        self._set_info("▸ 获取作者所有作品...")
+
+        async def _do():
+            from shared.core import norm_work
+            a = self._adapter()
+            try:
+                items = []
+                cursor = "0"
+                for page in range(10):
+                    data = await a.fetch_user_posts(sec, count=20,
+                                                    max_cursor=cursor)
+                    if not data:
+                        break
+                    if isinstance(data, list):
+                        items.extend(norm_work(w, self._platform) for w in data)
+                        break
+                    aws = data.get("aweme_list") or data.get("data") or []
+                    if not aws:
+                        break
+                    items.extend(norm_work(w, self._platform) for w in aws)
+                    if not data.get("has_more"):
+                        break
+                    cursor = str(data.get("max_cursor") or "0")
+                    if cursor == "0":
+                        break
+                return items
+            finally:
+                await a.close()
+
+        def _done(items):
+            self._open_table("作者所有作品", ["标题", "作者", "时长", "点赞"],
+                             [[w.get("title", "")[:50], w.get("author_name", ""),
+                               f"{w.get('duration', 0)}s",
+                               fmt_count(w.get("digg_count"))]
+                              for w in (items or [])])
+
+        self._run_task(_do(), _done, "作者作品", guard_key="works")
+
+    def _act_follow_list(self) -> None:
+        self._set_info("▸ 拉取关注列表...")
+
+        async def _do():
+            from shared.core import norm_user
+            u = await self._fetch_current_user()
+            sec = u.get("sec_user_id") or u.get("sec_uid") or ""
+            if not sec:
+                return None
+            a = self._adapter()
+            try:
+                users = []
+                max_time = "0"
+                for _ in range(3):
+                    data = await a.fetch_user_following(sec, count=20,
+                                                        max_time=max_time)
+                    if not data:
+                        break
+                    if isinstance(data, list):
+                        users.extend(norm_user(x, self._platform) for x in data)
+                        break
+                    fl = (data.get("followings") or data.get("follow_list")
+                          or (data.get("data") or {}).get("followings") or [])
+                    if not fl:
+                        break
+                    users.extend(norm_user(x, self._platform) for x in fl)
+                    if not data.get("has_more"):
+                        break
+                    max_time = str(data.get("max_time") or "0")
+                    if max_time == "0":
+                        break
+                return users
+            finally:
+                await a.close()
+
+        def _done(users):
+            if users is None:
+                self._set_info("⚠ 未获取到当前登录用户 (需登录 Cookie)")
+                return
+            self._open_table("关注列表", ["昵称", "签名", "粉丝"],
+                             [[u.get("nickname", ""),
+                               (u.get("signature") or "")[:30],
+                               fmt_count(u.get("follower_count"))]
+                              for u in users])
+
+        self._run_task(_do(), _done, "关注列表", guard_key="follow")
+
+    def _act_collect_list(self) -> None:
+        self._set_info("▸ 拉取收藏列表...")
+
+        async def _do():
+            from shared.core import norm_work
+            a = self._adapter()
+            try:
+                items = []
+                cursor = "0"
+                for _ in range(5):
+                    data = await a.fetch_collection(cursor=cursor, count=20)
+                    if not data:
+                        break
+                    if isinstance(data, list):
+                        items.extend(norm_work(w, self._platform) for w in data)
+                        break
+                    aws = (data.get("aweme_list")
+                           or (data.get("data") or {}).get("aweme_list") or [])
+                    if not aws:
+                        break
+                    items.extend(norm_work(w, self._platform) for w in aws)
+                    if not data.get("has_more"):
+                        break
+                    cursor = str(data.get("cursor") or "0")
+                    if cursor == "0":
+                        break
+                return items
+            finally:
+                await a.close()
+
+        def _done(items):
+            self._open_table("收藏列表", ["标题", "作者", "点赞"],
+                             [[w.get("title", "")[:50], w.get("author_name", ""),
+                               fmt_count(w.get("digg_count"))]
+                              for w in (items or [])])
+
+        self._run_task(_do(), _done, "收藏列表", guard_key="collect")
+
+    def _act_download_avatar(self) -> None:
+        self._set_info("▸ 获取用户头像...")
+
+        async def _do():
+            u = await self._fetch_current_user()
+            return u.get("avatar") or ""
+
+        def _done(url):
+            if not url:
+                self._set_info("⚠ 无头像地址 (需登录 Cookie)")
+                return
+            self._download_image(url, "avatars", "头像")
+
+        self._run_task(_do(), _done, "头像地址", guard_key="avatar-addr")
+
+    def _act_open_home(self) -> None:
+        sec = self._sec_uid()
+        if not sec:
+            self._set_info("⚠ 无作者信息 (先解析作品)")
+            return
+        p = (self._current_user.get("platform")
+             or self._work.get("platform") or self._platform)
+        home = {
+            "bilibili": f"https://space.bilibili.com/{sec}",
+            "kuaishou": f"https://www.kuaishou.com/profile/{sec}",
+            "xiaohongshu": f"https://www.xiaohongshu.com/user/profile/{sec}",
+        }.get(p, f"https://www.douyin.com/user/{sec}")
+        self._set_info(f"✓ 作者主页: {home}")
+
+    # ---------------- 当前用户 ----------------
+    def _load_current_user(self) -> None:
+        if not self._cm.get(self._platform):
+            return
+
+        async def _do():
+            return await self._fetch_current_user()
+
+        def _done(u):
+            if u:
+                self._set_info(f"✓ 当前用户: {u.get('nickname', '?')}")
+
+        self._run_task(_do(), _done, "当前用户", guard_key="user")
 
     # ---------------- 系统 ----------------
     def action_open_login(self) -> None:
@@ -381,8 +685,10 @@ class TuiApp(App):
 
     def _after_login(self, result) -> None:
         if result and result.get("cookie_changed"):
+            self._current_user = {}
             self._refresh_status()
             self._set_info("✓ Cookie 已更新")
+            self._load_current_user()
 
     def action_open_settings(self) -> None:
         self.push_screen(SettingsScreen(), self._after_settings)

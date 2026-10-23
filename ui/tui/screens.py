@@ -357,3 +357,45 @@ class BatchSelectScreen(ModalScreen):
 
     def action_dismiss_screen(self) -> None:
         self.dismiss(None)
+
+
+# ===================== 数据表屏 (作品/关注/收藏/评论 列表) =====================
+
+class DataTableScreen(ModalScreen):
+    """通用数据表 — 作品/关注/收藏/评论/搜索结果 列表展示。"""
+
+    BINDINGS = [("escape", "dismiss_screen", "关闭")]
+    DEFAULT_CSS = """
+    DataTableScreen { align: center middle; }
+    #dt-dlg { width: 96%; height: 92%; border: round $primary;
+              background: $surface; padding: 1 2; }
+    #dt-table { height: 1fr; }
+    .dlg-title { text-style: bold; margin-bottom: 1; }
+    """
+
+    def __init__(self, title: str, headers: list, rows: list):
+        super().__init__()
+        self.title_text = title
+        self.headers = headers
+        self.rows = rows
+
+    def compose(self):
+        with Vertical(id="dt-dlg"):
+            yield Label(f"{self.title_text} · {len(self.rows)} 行",
+                        classes="dlg-title")
+            yield DataTable(id="dt-table")
+            yield Button("关闭", id="btn-dt-close")
+
+    def on_mount(self) -> None:
+        table = self.query_one("#dt-table", DataTable)
+        for h in self.headers:
+            table.add_column(h)
+        for r in self.rows[:1000]:
+            table.add_row(*[str(c) for c in r])
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn-dt-close":
+            self.dismiss(None)
+
+    def action_dismiss_screen(self) -> None:
+        self.dismiss(None)
