@@ -415,3 +415,45 @@ class DataTableScreen(ModalScreen):
 
     def action_dismiss_screen(self) -> None:
         self.dismiss(None)
+
+
+# ===================== URL 列表屏 (图集替代图片显示) =====================
+
+class UrlListScreen(ModalScreen):
+    """图集/视频 URL 列表 — 终端无法显示图片, 用 URL 表替代查看。"""
+
+    BINDINGS = [("escape", "dismiss_screen", "关闭")]
+    DEFAULT_CSS = """
+    UrlListScreen { align: center middle; }
+    #url-dlg { width: 96%; height: 92%; border: round $primary;
+               background: $surface; padding: 1 2; }
+    #url-table { height: 1fr; }
+    .dlg-title { text-style: bold; margin-bottom: 1; }
+    """
+
+    def __init__(self, title: str, urls: list):
+        super().__init__()
+        self.title_text = title
+        self.urls = urls
+
+    def compose(self):
+        with Vertical(id="url-dlg"):
+            yield Label(f"{self.title_text} · {len(self.urls)} 个 URL "
+                        "(终端不显示图片, 可复制 URL 到浏览器查看)",
+                        classes="dlg-title")
+            yield DataTable(id="url-table")
+            yield Button("关闭", id="btn-url-close")
+
+    def on_mount(self) -> None:
+        table = self.query_one("#url-table", DataTable)
+        table.add_column("#", width=5)
+        table.add_column("URL")
+        for i, u in enumerate(self.urls, 1):
+            table.add_row(str(i), u)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn-url-close":
+            self.dismiss(None)
+
+    def action_dismiss_screen(self) -> None:
+        self.dismiss(None)

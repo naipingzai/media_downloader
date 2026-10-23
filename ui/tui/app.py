@@ -25,7 +25,7 @@ from shared.core import (
 )
 from platforms import load_all_platforms
 from .screens import (
-    BatchSelectScreen, DataTableScreen, LoginScreen, SettingsScreen, _fmt_count,
+    BatchSelectScreen, DataTableScreen, LoginScreen, SettingsScreen, UrlListScreen, _fmt_count,
 )
 
 APP_VERSION_LABEL = "TUI v1.1"
@@ -64,27 +64,28 @@ class TuiApp(App):
     ]
 
     CSS = """
-    #topbar { height: 3; dock: top; background: $surface;
-              border-bottom: solid $primary; }
-    #brand { text-style: bold; color: $primary; padding: 0 2; width: auto; }
-    .plat-btn { margin: 0 1; min-width: 10; }
+    Screen { layout: vertical; }
+    #plat-row { height: 3; padding: 0 1; background: $surface;
+                border-bottom: solid $primary; }
+    #plat-label { text-style: bold; color: $primary; padding: 0 1; }
+    .plat-btn { margin: 0 1; min-width: 8; height: 3; }
     .plat-btn.-active { background: $primary; color: $text; text-style: bold; }
-    #topbar-right { width: 1fr; padding: 0 2; color: $text-muted; }
-    #body { height: 1fr; }
-    #left-panel { width: 3fr; border: round $primary; padding: 0 1; }
-    #right-panel { width: 2fr; padding-left: 1; }
-    #author-card { height: auto; border: round $panel; padding: 0 1;
-                   margin-bottom: 1; }
-    #work-card { height: 1fr; border: round $panel; padding: 0 1; }
-    #author-title, #work-title, .sec-title { text-style: bold; color: $accent; }
+    #author-card { height: auto; border: round $panel; margin: 1 1 0 1;
+                   padding: 0 1; }
+    #author-title { text-style: bold; color: $accent; }
     #author-name { text-style: bold; }
     #author-stats, #author-sign { color: $text-muted; }
-    #work-detail { height: 1fr; overflow-y: auto; }
+    #work-card { height: auto; border: round $panel; margin: 1 1 0 1;
+                 padding: 0 1; }
+    #work-title { text-style: bold; color: $accent; }
+    #work-detail { height: auto; }
+    #link-row { height: 3; padding: 1 1 0 1; }
     #link-input { width: 1fr; }
-    #features-box { height: 1fr; overflow-y: auto; padding-right: 1; }
-    .feature-btn { width: 1fr; margin: 0 0 1 0; }
-    #log-panel { height: 14; border: round $panel; }
-    #footer-status { dock: bottom; color: $text-muted; padding: 0 2;
+    .sec-title { text-style: bold; color: $accent; padding: 1 1 0 1; }
+    #features-box { height: auto; max-height: 14; padding: 0 1 0 1; }
+    .feature-btn { width: 1fr; height: 3; margin: 0 1 0 1; }
+    #log-panel { height: 1fr; border: round $panel; margin: 0 1; }
+    #footer-status { dock: bottom; color: $text-muted; padding: 0 1;
                      background: $surface; }
     """
 
@@ -108,31 +109,32 @@ class TuiApp(App):
     # ---------------- 布局 ----------------
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
-        with Horizontal(id="topbar"):
-            yield Label("MediaDownloader", id="brand")
+        # 平台切换
+        with Horizontal(id="plat-row"):
+            yield Label("平台:", id="plat-label")
             for pid in PlatformBus.list_platforms():
                 yield Button(_pn(pid), id=f"plat-{pid}", classes="plat-btn")
-            yield Label("l登录 s设置 d目录 Ctrl+P解析 x停止 q退出",
-                        id="topbar-right")
-        with Horizontal(id="body"):
-            with Vertical(id="left-panel"):
-                with Vertical(id="author-card"):
-                    yield Label("作者资料", id="author-title")
-                    yield Label("未选择平台", id="author-name")
-                    yield Label("", id="author-stats")
-                    yield Label("", id="author-sign")
-                with Vertical(id="work-card"):
-                    yield Label("作品资料", id="work-title")
-                    yield Static("粘贴链接 → Ctrl+P 解析预览", id="work-detail")
-            with Vertical(id="right-panel"):
-                yield Label("链接", classes="sec-title")
-                yield Input(placeholder="粘贴作品链接/分享文本 → Ctrl+P 解析",
-                            id="link-input")
-                yield Label("功能", classes="sec-title")
-                yield VerticalScroll(id="features-box")
-                yield Label("执行日志", classes="sec-title")
-                yield RichLog(id="log-panel", wrap=True, markup=False,
-                              highlight=False)
+        # 作者资料 (纯文本)
+        with Vertical(id="author-card"):
+            yield Label("👤 作者资料", id="author-title")
+            yield Label("未选择平台", id="author-name")
+            yield Label("", id="author-stats")
+            yield Label("", id="author-sign")
+        # 作品资料 (纯文本, 不显示图片)
+        with Vertical(id="work-card"):
+            yield Label("📌 作品资料", id="work-title")
+            yield Static("粘贴链接 → 解析预览 (Ctrl+P)", id="work-detail")
+        # 链接输入
+        with Horizontal(id="link-row"):
+            yield Input(placeholder="粘贴作品链接/分享文本 (自动提取 http 链接)",
+                        id="link-input")
+            yield Button("解析 (Ctrl+P)", id="act-preview", variant="primary")
+        # 功能菜单 (作品/作者/平台 三组, 全部功能)
+        yield Label("📋 功能", classes="sec-title")
+        yield VerticalScroll(id="features-box")
+        # 日志
+        yield Label("📜 执行日志", classes="sec-title")
+        yield RichLog(id="log-panel", wrap=True, markup=False, highlight=False)
         yield Label("", id="footer-status")
         yield Footer()
 
@@ -170,6 +172,7 @@ class TuiApp(App):
             return
         groups = [
             ("w", "作品操作", [
+                ("图片URL列表", self._act_show_urls),
                 ("获取链接", self._act_copy_link),
                 ("查看评论", self._act_comments),
                 ("下载封面", self._act_download_cover),
@@ -229,6 +232,9 @@ class TuiApp(App):
     # ---------------- 事件 ----------------
     def on_button_pressed(self, event: Button.Pressed) -> None:
         bid = event.button.id or ""
+        if bid == "act-preview":
+            self.action_preview()
+            return
         if bid.startswith("plat-"):
             self.action_select_platform(bid[5:])
             return
@@ -492,6 +498,34 @@ class TuiApp(App):
         self.push_screen(BatchSelectScreen(title, items), _cb)
 
     # ---------------- 作者/作品 操作 ----------------
+    def _act_show_urls(self) -> None:
+        """图片/视频 URL 列表 — 终端不显示图片, 列出 URL 供浏览器查看。"""
+        w = self._work
+        if not w:
+            self.log_line("⚠ 无作品 (先解析预览)", "yellow")
+            return
+        media = w.get("media_type") or ""
+        imgs = w.get("image_urls")
+        if isinstance(imgs, str) and imgs.startswith("["):
+            import ast
+            try:
+                imgs = ast.literal_eval(imgs)
+            except Exception:
+                imgs = []
+        urls = ([u for u in imgs if isinstance(u, str)]
+                if isinstance(imgs, list) else [])
+        if not urls and media != "images":
+            v = w.get("video_url") or self._norm_work.get("video_url") or ""
+            if v:
+                urls = [v]
+        if not urls:
+            self.log_line("⚠ 无图片/视频 URL", "yellow")
+            return
+        title = (w.get("title") or "")[:30] or "作品"
+        self.push_screen(UrlListScreen(title, urls))
+        self.log_line(f"✓ {len(urls)} 个 URL (Esc 关闭, 可复制到浏览器查看)",
+                      "green")
+
     def _act_copy_link(self) -> None:
         url = self._work.get("share_url") or self._norm_work.get("share_url")
         if url:
