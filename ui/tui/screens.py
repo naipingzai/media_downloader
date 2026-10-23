@@ -1,41 +1,23 @@
-"""TUI 模态屏 — 与 GUI ToolWindow 页面同步 (v2)。
-
-LoginScreen / SettingsScreen / BatchSelectScreen / DataTableScreen
-"""
+"""TUI 模态屏 (精简版) — 只保留下载相关: 登录 / 设置 / 批量勾选。"""
 from __future__ import annotations
 
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Input, Label, Static
 
-from shared.core import CookieManager, ConfigManager, platform_name as _pn
 
-
-def _fmt_count(n) -> str:
-    """12345 → 1.2万 (对应 GUI 数字格式)。"""
-    try:
-        n = int(n or 0)
-    except (TypeError, ValueError):
-        return "0"
-    if n >= 100000000:
-        return f"{n / 100000000:.1f}亿"
-    if n >= 10000:
-        return f"{n / 10000:.1f}万"
-    return str(n)
-
-
-# ===================== 登录屏 (对应 LoginPage) =====================
+# ===================== 登录屏 =====================
 
 class LoginScreen(ModalScreen):
-    """登录屏 — QR 码 (终端半块字符画) + Cookie 手动粘贴。"""
+    """登录 — QR 终端字符画 + Cookie 粘贴。"""
 
     BINDINGS = [("escape", "dismiss_screen", "关闭")]
     DEFAULT_CSS = """
     LoginScreen { align: center middle; }
-    #login-dlg { width: 66; height: auto; max-height: 92%;
+    #login-dlg { width: 68; height: auto; max-height: 92%;
                  border: round $primary; background: $surface; padding: 1 2; }
     #login-title { text-style: bold; margin-bottom: 1; }
-    #login-scroll { height: auto; max-height: 24; }
+    #login-scroll { height: auto; max-height: 26; }
     #qr-art { background: white; color: black; padding: 0 1; width: auto; }
     #login-status { color: $warning; margin-top: 1; }
     #login-actions { height: auto; align-horizontal: right; margin-top: 1; }
@@ -45,13 +27,14 @@ class LoginScreen(ModalScreen):
         super().__init__()
         self.platform = platform
         self.cookie_hint = cookie_hint
-        self._cm = CookieManager()
+        self._cm = None
         self._qr_key = ""
         self._manager = None
         self._poll_count = 0
 
     def compose(self):
-        from shared.core import LoginBus
+        from shared.core import CookieManager, LoginBus, platform_name as _pn
+        self._cm = CookieManager()
         cur = self._cm.get(self.platform)
         with Vertical(id="login-dlg"):
             yield Label(f"登录 · {_pn(self.platform)}", id="login-title")
@@ -60,11 +43,11 @@ class LoginScreen(ModalScreen):
             yield Label(status, id="login-status")
             with VerticalScroll(id="login-scroll"):
                 if LoginBus.has_qr(self.platform):
-                    yield Label("扫码登录 — 使用 App 扫描下方二维码")
-                    yield Static("点击「生成二维码」按钮显示", id="qr-art")
+                    yield Label("扫码登录 — 用 App 扫描二维码")
+                    yield Static("点击「生成二维码」", id="qr-art")
                 if self.cookie_hint:
                     yield Label(f"建议 Cookie 包含: {self.cookie_hint}")
-                yield Label("或手动: 浏览器 F12 → Application → Cookies 复制整行 Cookie:")
+                yield Label("手动: 浏览器 F12 → Application → Cookies 复制整行:")
                 yield Input(placeholder="粘贴 Cookie 字符串…", id="cookie-input")
             with Horizontal(id="login-actions"):
                 if LoginBus.has_qr(self.platform):
@@ -109,7 +92,7 @@ class LoginScreen(ModalScreen):
             self._manager = mgr
             self._qr_key = key
             self.query_one("#qr-art", Static).update(self._img_to_art(img))
-            self.query_one("#login-status", Label).update("请使用 App 扫描二维码")
+            self.query_one("#login-status", Label).update("请用 App 扫描二维码")
             self._poll_count = 0
             self.set_interval(3.0, self._poll_qr)
         except Exception as e:
@@ -184,15 +167,15 @@ class LoginScreen(ModalScreen):
         self.dismiss({})
 
 
-# ===================== 设置屏 (对应 SettingsPage) =====================
+# ===================== 设置屏 =====================
 
 class SettingsScreen(ModalScreen):
-    """设置屏 — 同步 GUI SettingsPage 全部配置项。"""
+    """设置 — 存储/输出/下载/FFmpeg。"""
 
     BINDINGS = [("escape", "dismiss_screen", "关闭")]
     DEFAULT_CSS = """
     SettingsScreen { align: center middle; }
-    #settings-dlg { width: 74; height: auto; max-height: 92%;
+    #settings-dlg { width: 76; height: auto; max-height: 92%;
                     border: round $primary; background: $surface; padding: 1 2; }
     .set-label { margin-top: 1; }
     .dlg-actions { height: auto; align-horizontal: right; margin-top: 1; }
@@ -227,18 +210,19 @@ class SettingsScreen(ModalScreen):
 
     def __init__(self):
         super().__init__()
-        self._config = ConfigManager.load()
+        self._config = None
 
     def compose(self):
+        from shared.core import ConfigManager
         from textual.widgets import Switch
+        self._config = ConfigManager.load()
         with Vertical(id="settings-dlg"):
             yield Label("⚙ 设置", classes="dlg-title")
             with VerticalScroll():
                 for name, opts in self._SELECT_FIELDS.items():
                     yield Label(self._LABELS[name], classes="set-label")
                     yield Input(value=str(getattr(self._config, name)),
-                                id=f"set-{name}",
-                                placeholder=" | ".join(opts))
+                                id=f"set-{name}", placeholder=" | ".join(opts))
                 for name in self._BOOL_FIELDS:
                     yield Label(self._LABELS[name], classes="set-label")
                     yield Switch(value=bool(getattr(self._config, name)),
@@ -259,6 +243,7 @@ class SettingsScreen(ModalScreen):
             return
         if event.button.id != "btn-save-settings":
             return
+        from shared.core import ConfigManager
         from textual.widgets import Switch
         cfg = self._config
         try:
@@ -285,10 +270,10 @@ class SettingsScreen(ModalScreen):
         self.dismiss(None)
 
 
-# ===================== 批量勾选屏 (对应 WorkGridPage) =====================
+# ===================== 批量勾选屏 =====================
 
 class BatchSelectScreen(ModalScreen):
-    """批量下载预览勾选 (预览 → 空格勾选 → Ctrl+D 下载)。"""
+    """批量下载勾选 — 空格勾选 + Ctrl+D 下载。"""
 
     BINDINGS = [("escape", "dismiss_screen", "取消"),
                 ("a", "select_all", "全选"),
@@ -296,18 +281,18 @@ class BatchSelectScreen(ModalScreen):
                 ("ctrl+d", "download", "下载勾选")]
     DEFAULT_CSS = """
     BatchSelectScreen { align: center middle; }
-    #batch-dlg { width: 92%; height: 88%; border: round $primary;
+    #batch-dlg { width: 94%; height: 90%; border: round $primary;
                  background: $surface; padding: 1 2; }
     #batch-table { height: 1fr; }
     #batch-actions { height: auto; align-horizontal: right; margin-top: 1; }
     .dlg-title { text-style: bold; margin-bottom: 1; }
     """
 
-    def __init__(self, title: str, items: list[dict]):
+    def __init__(self, title: str, items: list):
         super().__init__()
         self.title_text = title
         self.items = items
-        self._checked: set[str] = set()
+        self._checked: set = set()
 
     def compose(self):
         with Vertical(id="batch-dlg"):
@@ -331,9 +316,8 @@ class BatchSelectScreen(ModalScreen):
         table.add_column("作者")
         for i, it in enumerate(self.items):
             wid = str(it.get("work_id", i))
-            title = (it.get("title") or "")[:50]
-            author = it.get("author_name") or it.get("extra") or ""
-            table.add_row("☐", wid, title, author, key=wid)
+            table.add_row("☐", wid, (it.get("title") or "")[:50],
+                          it.get("author_name") or it.get("extra") or "", key=wid)
 
     def on_data_table_row_selected(self, event) -> None:
         wid = str(event.row_key.value)
@@ -370,90 +354,6 @@ class BatchSelectScreen(ModalScreen):
 
     def action_download(self) -> None:
         self.dismiss(list(self._checked))
-
-    def action_dismiss_screen(self) -> None:
-        self.dismiss(None)
-
-
-# ===================== 数据表屏 (对应 DataTablePage) =====================
-
-class DataTableScreen(ModalScreen):
-    """通用数据表屏 (评论/关注/收藏/搜索结果等)。"""
-
-    BINDINGS = [("escape", "dismiss_screen", "关闭")]
-    DEFAULT_CSS = """
-    DataTableScreen { align: center middle; }
-    #dt-dlg { width: 96%; height: 92%; border: round $primary;
-              background: $surface; padding: 1 2; }
-    #dt-table { height: 1fr; }
-    .dlg-title { text-style: bold; margin-bottom: 1; }
-    """
-
-    def __init__(self, title: str, headers: list[str], rows: list[list]):
-        super().__init__()
-        self.title_text = title
-        self.headers = headers
-        self.rows = rows
-
-    def compose(self):
-        with Vertical(id="dt-dlg"):
-            yield Label(f"{self.title_text} · {len(self.rows)} 行",
-                        classes="dlg-title")
-            yield DataTable(id="dt-table")
-            yield Button("关闭", id="btn-dt-close")
-
-    def on_mount(self) -> None:
-        table = self.query_one("#dt-table", DataTable)
-        for h in self.headers:
-            table.add_column(h)
-        for r in self.rows[:1000]:
-            table.add_row(*[str(c) for c in r])
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "btn-dt-close":
-            self.dismiss(None)
-
-    def action_dismiss_screen(self) -> None:
-        self.dismiss(None)
-
-
-# ===================== URL 列表屏 (图集替代图片显示) =====================
-
-class UrlListScreen(ModalScreen):
-    """图集/视频 URL 列表 — 终端无法显示图片, 用 URL 表替代查看。"""
-
-    BINDINGS = [("escape", "dismiss_screen", "关闭")]
-    DEFAULT_CSS = """
-    UrlListScreen { align: center middle; }
-    #url-dlg { width: 96%; height: 92%; border: round $primary;
-               background: $surface; padding: 1 2; }
-    #url-table { height: 1fr; }
-    .dlg-title { text-style: bold; margin-bottom: 1; }
-    """
-
-    def __init__(self, title: str, urls: list):
-        super().__init__()
-        self.title_text = title
-        self.urls = urls
-
-    def compose(self):
-        with Vertical(id="url-dlg"):
-            yield Label(f"{self.title_text} · {len(self.urls)} 个 URL "
-                        "(终端不显示图片, 可复制 URL 到浏览器查看)",
-                        classes="dlg-title")
-            yield DataTable(id="url-table")
-            yield Button("关闭", id="btn-url-close")
-
-    def on_mount(self) -> None:
-        table = self.query_one("#url-table", DataTable)
-        table.add_column("#", width=5)
-        table.add_column("URL")
-        for i, u in enumerate(self.urls, 1):
-            table.add_row(str(i), u)
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "btn-url-close":
-            self.dismiss(None)
 
     def action_dismiss_screen(self) -> None:
         self.dismiss(None)
