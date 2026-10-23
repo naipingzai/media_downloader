@@ -106,7 +106,7 @@ def norm_user(u: dict, platform: str = "") -> dict:
 
 
 def _cover_of(v: dict) -> str:
-    for k in ("cover", "origin_cover", "dynamic_cover", "coverUrl", "poster"):
+    for k in ("cover_url", "cover", "origin_cover", "dynamic_cover", "coverUrl", "poster"):
         c = v.get(k) if isinstance(v, dict) else None
         if isinstance(c, dict):
             urls = c.get("url_list") or c.get("url") or []

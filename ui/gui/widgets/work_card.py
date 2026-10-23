@@ -125,7 +125,13 @@ class WorkCardWidget(QFrame):
     def __init__(self, work: dict, checked: bool = True, parent=None):
         super().__init__(parent)
         self._work_id = str(work.get("work_id", ""))
-        self._cover_url = str(work.get("cover_url") or work.get("cover") or "")
+        cov = (work.get("cover_url") or work.get("cover")
+               or work.get("pic") or "")
+        if isinstance(cov, dict):
+            urls = cov.get("url_list") or cov.get("url") or []
+            cov = (urls[0] if isinstance(urls, list) and urls
+                   else urls if isinstance(urls, str) else "")
+        self._cover_url = str(cov)
         self._checked = checked
         self.setCursor(Qt.PointingHandCursor)
 
@@ -138,10 +144,17 @@ class WorkCardWidget(QFrame):
         body.setContentsMargins(10, 10, 10, 10)
         body.setSpacing(12)
 
-        # 左侧：封面
+        # 左侧：封面 (组件自加载, 调用方无需喂图)
         self._cover = CoverLabel("封面")
         self._cover.setMinimumSize(128, 80)
         self._cover.setFixedSize(152, 96)
+        if self._cover_url:
+            from ..cover_loader import CoverLoader
+            loader = CoverLoader.instance()
+            loader.cover_ready.connect(self._on_cover_ready)
+            cached = loader.request(self._cover_url)
+            if cached is not None:
+                self._cover.set_source_pixmap(cached)
         body.addWidget(self._cover, 0, Qt.AlignTop)
 
         # 右侧：资料 (边框行)
@@ -198,6 +211,10 @@ class WorkCardWidget(QFrame):
 
     def set_cover_pixmap(self, pix: QPixmap):
         self._cover.set_source_pixmap(pix)
+
+    def _on_cover_ready(self, url: str, pix: QPixmap):
+        if url == self._cover_url and not pix.isNull():
+            self._cover.set_source_pixmap(pix)
 
     # ---- 交互 ----
     def _on_check_toggled(self, v: bool):
