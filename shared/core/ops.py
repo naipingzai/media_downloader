@@ -1,5 +1,7 @@
 """平台总线 —— 注册、发现、调度。所有 UI 的唯一入口。"""
 from __future__ import annotations
+
+import inspect
 from abc import ABC
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -22,10 +24,21 @@ class FeatureResult:
 
 @dataclass(frozen=True)
 class FeatureMeta:
-    """单个功能的描述。UI 用此渲染菜单。"""
+    """单个功能的描述。UI 用此渲染菜单。
+
+    Attributes:
+        id:              功能标识 (方法名 _do_<id>)。
+        name:            中文显示名。
+        need_url:        是否需要输入链接。
+        emits_work_info: 结果 data[0] 是否为单作品数据 (UI 据此更新作品
+                         资料卡, 取代 UI 侧硬编码功能名单)。
+        group:           功能分组标签 (UI 按组渲染: work/user/platform)。
+    """
     id: str
     name: str
     need_url: bool
+    emits_work_info: bool = False
+    group: str = "platform"   # work / user / platform
 
 
 class PlatformOps(ABC):
@@ -34,18 +47,20 @@ class PlatformOps(ABC):
     display_name: str = ""
     cookie_hint: str = ""
     features: list[FeatureMeta] = []
+
     _on_log = None
+    task_key = ""  # 当前功能执行的唯一标识 (FileDownloader 队列注册用)
 
     async def execute(self, feature_id: str, url: str,
                       cookie: str, save_dir: Path,
                       on_log=None, selected: list[str] | None = None,
-                      stop_event=None) -> FeatureResult:
+                      stop_event=None, task_key: str = "") -> FeatureResult:
         self._on_log = on_log
+        self.task_key = task_key
         method = getattr(self, f"_do_{feature_id}", None)
         if method is None:
             return FeatureResult(False, f"功能 {feature_id} 未实现")
-        # 透传 stop_event（仅当 _do_xxx 声明了该参数）
-        import inspect
+        # 透传 stop_event/selected/task_key（仅当 _do_xxx 声明了该参数）
         try:
             params = inspect.signature(method).parameters
         except (TypeError, ValueError):
@@ -55,6 +70,8 @@ class PlatformOps(ABC):
             kwargs["stop_event"] = stop_event
         if selected is not None and "selected" in params:
             kwargs["selected"] = selected
+        if task_key and "task_key" in params:
+            kwargs["task_key"] = task_key
         if kwargs:
             return await method(url, cookie, save_dir, **kwargs)
         return await method(url, cookie, save_dir)
@@ -82,6 +99,19 @@ class PlatformBus:
         return list(cls._registry.keys())
 
     @classmethod
+    def display_name_of(cls, platform: str) -> str:
+        ops = cls._registry.get(platform)
+        return ops.display_name if ops else platform
+
+    @classmethod
+    def get_feature(cls, platform: str, feature_id: str) -> FeatureMeta | None:
+        """按 id 查找单个功能元数据。"""
+        for f in cls.get_features(platform):
+            if f.id == feature_id:
+                return f
+        return None
+
+    @classmethod
     def get_features(cls, platform: str) -> list[FeatureMeta]:
         ops = cls._registry.get(platform)
         return list(ops.features) if ops else []
@@ -98,10 +128,10 @@ class PlatformBus:
     async def run(cls, platform: str, feature_id: str,
                   url: str, cookie: str, save_dir: Path,
                   on_log=None, selected: list[str] | None = None,
-                  stop_event=None) -> FeatureResult:
+                  stop_event=None, task_key: str = "") -> FeatureResult:
         ops = cls._registry.get(platform)
         if ops is None:
             return FeatureResult(False, f"平台 {platform} 未注册")
         return await ops.execute(feature_id, url, cookie, save_dir,
                                  on_log=on_log, selected=selected,
-                                 stop_event=stop_event)
+                                 stop_event=stop_event, task_key=task_key)

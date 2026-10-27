@@ -233,6 +233,40 @@ class BilibiliAdapter(PlatformAdapter):
         except Exception:
             return []
 
+    async def fetch_search(self, keyword: str, page: int = 1,
+                           max_count: int = 30) -> list[dict]:
+        """综合搜索视频 (web/wbi/search/type, search_type=video)。
+
+        返回经 _video_preview 兼容字段化前的原始列表 (含 bvid/title/
+        author/pic/duration/like 等), 供 ops._do_search 二次加工。
+        """
+        if not keyword.strip():
+            return []
+        try:
+            from curl_cffi.requests import AsyncSession
+            async with AsyncSession(impersonate=IMPERSONATE) as c:
+                await self._ensure_wbi(c)
+                params = {
+                    "search_type": "video",
+                    "keyword": keyword.strip(),
+                    "page": str(max(1, page)),
+                    "page_size": "20",
+                }
+                if self._img_key and self._sub_key:
+                    params = _wbi_sign(params, self._img_key, self._sub_key)
+                url = f"{BASE_URL}/x/web-interface/wbi/search/type"
+                r = await c.get(url, params=params, headers=self._headers(),
+                                proxy=self.proxy)
+                if r.status_code != 200:
+                    return []
+                data = self._sj(r)
+                # 未登录/风控时 code=-412 或 results 为空
+                results = self._jget(data, "data", "result") or []
+                return [v for v in results
+                        if isinstance(v, dict) and v.get("bvid")][:max_count]
+        except Exception:
+            return []
+
     async def fetch_user_videos(self, mid: str, max_count: int = 30) -> list[dict]:
         """获取用户视频列表。"""
         try:

@@ -28,6 +28,8 @@ class AppConfig:
     download_metadata: bool = True
     # FFmpeg
     ffmpeg_path: str = ""
+    # 下载队列
+    speed_limit: int = 0  # 全局限速 KB/s, 0 = 不限
     # 外观
     font_size: int = 14   # 12~20, 14 默认
 

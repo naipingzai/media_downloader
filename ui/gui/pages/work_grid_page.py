@@ -40,6 +40,11 @@ class WorkGridPage(ListPageBase):
     def set_works(self, items: list, title: str = "作品列表"):
         """填充作品列表 (单列卡片行)。"""
         self.clear_content()
+        if not items:
+            self.show_empty("暂无作品", "粘贴链接并解析预览, 或执行一次批量采集")
+            self.set_title(title)
+            self._refresh_count()
+            return
         self._cards.clear()
         self._items = list(items)
         for work in items:

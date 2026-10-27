@@ -160,8 +160,8 @@ class XxxOps(PlatformOps):
 
 | 参考项目 | 整合的能力 |
 |---------|-----------|
-| [TikTokDownloader](https://github.com/JoeanAmier/TikTokDownloader) | 抖音 X-Bogus/msToken 加密、批量下载、直播录制 |
-| [XHS-Downloader](https://github.com/JoeanAmier/XHS-Downloader) | 小红书 x-s/x-t 签名、图集下载 |
+| [DouK-Downloader](https://github.com/JoeanAmier/TikTokDownloader) (原 TikTokDownloader, V5.8) | 抖音 X-Bogus/msToken/aBogus 加密、批量下载、直播录制 |
+| [XHS-Downloader](https://github.com/JoeanAmier/XHS-Downloader) (V2.8) | 小红书 x-s/x-t 签名、图集下载 |
 | [KS-Downloader](https://github.com/MediaHarbor/KS-Downloader) | 快手 H5 API、收藏夹 |
 | [bilibili-downloader](https://github.com/) | B站 WBI 签名、合集/系列、弹幕 |
 
@@ -176,6 +176,7 @@ class XxxOps(PlatformOps):
 - [x] TUI 终端原生界面
 - [x] 数据归一化规范（norm_work/user/comment）
 - [x] 扫码登录 + Cookie 管理
+- [x] **工程加固** (2026-10): 统一日志/异常分层重试/去重缓存/Cookie 原子写/断点续传修复/SSL 默认开启/单测 30 例 + CI
 - [ ] **搜索功能** 全平台覆盖（当前仅快手）
 - [ ] **下载队列管理**（暂停/续传/限速）
 - [ ] **数据导出**（CSV/JSON/SQLite）

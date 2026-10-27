@@ -40,10 +40,6 @@ from .screens import (
 
 APP_VERSION_LABEL = "TUI"
 
-# 下载类功能 (执行成功后刷新作品信息)
-_DOWNLOAD_FEATURES = {"download", "account", "mix", "series",
-                      "collection", "collection_album", "favorite_folder",
-                      "live", "tk_download", "ks_download", "xhs_download"}
 
 
 def fmt_count(n) -> str:
@@ -472,8 +468,9 @@ class TuiApp(App):
             msg = result.message
             if result.files:
                 msg += f" (保存 {len(result.files)} 个文件)"
-            if result.data and feature_id in _DOWNLOAD_FEATURES \
-                    and not result.preview:
+            _meta = PlatformBus.get_feature(self._platform, feature_id)
+            if (result.data and _meta and _meta.emits_work_info
+                    and not result.preview):
                 from shared.core import norm_work
                 d0 = result.data[0]
                 self._work = d0

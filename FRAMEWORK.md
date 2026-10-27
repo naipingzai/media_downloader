@@ -416,3 +416,175 @@ class GuiBackend:
 | `ui/gui/backend.py` | **重写** 220→40 行 |
 | `ui/web/app.py` | **简化** |
 | `ui/cli/main.py` | **简化** |
+
+
+---
+
+## 十一、工程优化记录 (2026-10)
+
+### 11.1 核心机制升级
+
+| 机制 | 变更 |
+|------|------|
+| **FeatureMeta 扩展** | 新增 `emits_work_info` (单作品结果标志) 与 `group` (work/user/platform 分组) 字段。UI 据此动态渲染分组按钮并决定是否更新作品资料卡, **删除了 UI 侧硬编码功能名单** |
+| **PlatformBus 新 API** | `get_feature(platform, feature_id)` 按 id 查元数据; `display_name_of(platform)` 取显示名 |
+| **日志体系** | 新增 `shared/core/logger.py`: 控制台 + Volume/logs/ 滚动文件双输出, `attach_gui_handler()` 可将日志桥接到 GUI 面板 |
+| **异常分层** | `error.py` 定义 `RetryableError / RateLimitedError / AuthError / FatalError`; `Retry` 按异常分级退避, Auth/Fatal 不再重试 |
+| **去重索引** | `StorageOps` 内置 `_DedupIndex` 内存 set 缓存, 下载记录 O(1) 查询, 消除每次全量读文件 |
+| **Cookie 原子写** | `CookieManager` 全操作加 `threading.Lock`, JSON 落盘改为 临时文件 + `os.replace` 原子替换, 防崩溃丢数据 |
+| **断点续传修复** | `FileDownloader` 补发 `Range: bytes={n}-` 请求头; 服务器返回 200 (不支持 Range) 时全量重写, 杜绝文件拼接损坏 |
+| **SSL 验证** | `session.py` 默认 `verify=True`; 仅环境变量 `MD_SSL_VERIFY=0` 时关闭 (调试用) |
+| **CSV 规范化** | `StorageOps._save_csv` 改用标准库 `csv.DictWriter`, 正确处理逗号/引号/换行 |
+
+### 11.2 参考工程动态 (2026-09 调研)
+
+| 参考项目 | 最新状态 | 可跟进能力 |
+|---------|---------|-----------|
+| TikTokDownloader → **DouK-Downloader** V5.8 (2026-09-13) | 更名并持续维护 | TikTok 双平台参数、aBogus 新版签名 |
+| XHS-Downloader V2.8 (2026-09-12) | 活跃 | x-s 签名更新、图集评论增强 |
+| KS-Downloader | 低频维护 | H5 API 基本稳定 |
+| bilibili-downloader | 社区分散 | WBI 签名、DASH 音视频合并 (已实现) |
+
+### 11.3 已知待办
+
+- [ ] Cookie 加密存储 (keyring / Fernet)
+- [ ] 下载队列管理 (暂停/续传/限速)
+- [ ] 搜索功能全平台覆盖 (当前仅快手)
+- [ ] 内嵌浏览器免抓 Cookie (docs/APP_BROWSER_PLAN.md)
+- [ ] `MediaDownloader.spec` 动态生成 (当前硬编码路径已失效, 由 scripts/build.py 接管)
+- [ ] i18n 接回配置项或移除死代码 (i18n.py)
+
+
+---
+
+## 十二、加密模块与代码整理 (2026-10 第二批)
+
+### 12.1 抖音/TikTok 签名模块 (platforms/douyin/encrypt/) — 自维护
+
+签名算法来自 DouK-Downloader 采用的逆向实现 (源头 Evil0ctal/Douyin_TikTok_Download_API,
+Apache-2.0)。**平台前端 JS 更新后可能失效, 本目录需跟随上游维护**:
+
+| 文件 | 职责 | 来源 |
+|------|------|------|
+| `aBogus.py` | 抖音 a_bogus 签名 (bdms.js v1.0.1.19-fix.01) | 逆向 |
+| `websign.py` | x-secsdk-web-signature (secsdk runtime_bundler_34.js) | 逆向 |
+| `tiktok_sign.py` | TikTok webmssdk (2.0.0.561) X-Bogus 系签名 | 逆向 |
+| `sm3.py` | 国密 SM3 哈希 (aBogus 依赖) | 算法 |
+| `params.py` | 参数拼装基类 | 自研 |
+| `douyin_params.py` | DouYinParams 门面 (签名入口 + 保护路径表) | 自研 |
+| `tiktok_params.py` | TikTokParams 门面 | 自研 |
+
+跟进地址: 上游 releases 或 `src/dtk/signing/native/`。入口唯一:
+`DouYinParams().sign_url(api, params, method, user_agent)`。
+
+已于 2026-10 清理 7 个历史遗留死文件 (msToken/xBogus/xGnarly/ttWid/
+device_id/verifyFp/webID, 旧版 V4.x 方案, 已无调用方)。
+
+### 12.2 Cookie 加密存储 (shared/core/secret.py)
+
+- Fernet 对称加密 (cryptography), 密钥 `Volume/.secret_key` (0600)。
+- 落盘格式 `enc:<base64>`; 读取兼容旧版明文, 写入一律加密 → 平滑升级。
+- 密钥损坏时解密返回空串 (引导重新登录), 不抛异常。
+
+### 12.3 死代码清理与命名
+
+| 项 | 处理 |
+|----|------|
+| `i18n.py` 翻译表 + t() | 全 UI 无调用, 移除; 保留 `platform_name()` (被 GUI/TUI 广泛使用), 留恢复说明 |
+| `MediaDownloader.spec` | 删除 (硬编码 /home/npznnz 路径已失效); build.py 的 CLI 参数即唯一打包入口 |
+| `build.py` hidden-import | 移除 4 个死模块声明, 补齐现役 encrypt 模块 + secret/logger/error/retry |
+| 依赖 | 新增 `cryptography>=42.0` (requirements + pyproject) |
+
+### 12.4 模块地图 (2026-10 现状)
+
+```
+shared/core/       ops(总线) adapter(ABC+norm_*) storage(存储+去重)
+                   config cookies(加密) secret(Fernet) session(SSL可配)
+                   retry(分级) error(异常层) logger(文件+GUI桥) login i18n(平台名)
+                   ffmpeg format formats(编码预设) constants
+shared/flow/       link(链接提取) download(断点续传) request extract storage
+platforms/         {douyin,bilibili,kuaishou,xiaohongshu}/{ops,adapter,login}
+                   douyin/encrypt/ (aBogus+websign+tiktok_sign, 自维护)
+ui/gui/            main_window pages widgets threads(worker)
+ui/tui/            app screens
+```
+
+
+---
+
+## 十三、搜索覆盖与下载队列 (2026-10 第三批)
+
+### 13.1 搜索功能覆盖进度
+
+| 平台 | 状态 | 说明 |
+|------|------|------|
+| 抖音 | ✅ (既有) | web/search 接口 |
+| 快手 | ✅ (既有) | H5 搜索 |
+| **B站** | ✅ **新增** | `web-interface/wbi/search/type` (WBI 签名), ops 两阶段: 关键词→预览勾选→批量下载 |
+| 小红书 | ⏸ 暂缓 | web_search 接口需 x-s 签名 (当前 encrypt 未覆盖小红书), 待签名方案补充 |
+
+B站搜索入口: FeatureMeta("search", "搜索视频并下载") → `_do_search(keyword)`,
+复用 `_video_preview/_batch_download` 既有管线。
+
+### 13.2 下载队列管理 (shared/flow/queue.py)
+
+**DownloadQueue (进程单例)** — UI/Worker 与下载器的解耦控制面:
+
+| 能力 | API | 实现 |
+|------|-----|------|
+| 按任务停止 | `stop_task(task_key)` (前缀匹配) | DownloadHandle.stop_flag → chunk 循环抛 InterruptedError |
+| 全局停止 | `stop_all()` | 同上 |
+| 暂停/恢复 | `pause_all()/resume_all()` | chunk 间异步挂起 (`asyncio.sleep(0.2)` 轮询) |
+| 全局限速 | `set_speed_limit(KB/s)` | chunk 间 `asyncio.sleep(CHUNK_SIZE/limit)` |
+| 状态查询 | `status()` | 键/已下载/总量/暂停/停止 |
+
+**链路**: FeatureWorker (生成 task_key) → PlatformBus.run(task_key=…)
+→ PlatformOps.execute 反射透传 → ops._do_* → FileDownloader(task_key=…)
+→ queue.register(handle) → UI 停止按钮 → worker.stop() → queue.stop_task。
+
+断点续传保证: 停止时 .tmp 保留, 再次下载自动 Range 续传。
+
+
+---
+
+## 十四、数据导出与队列 UI 集成 (2026-10 第四批)
+
+### 14.1 数据导出 (shared/flow/export.py)
+
+- `export_rows(headers, rows, path)`: 按扩展名写 CSV (utf-8-sig, 标准库
+  csv 转义) 或 JSON (dict 列表)。
+- `export_dialog(parent, …)`: 系统保存对话框 + 结果提示。
+- **DataTablePage** 页脚新增「导出 CSV/JSON」按钮, 评论/搜索/收藏等
+  一切表格数据均可一键导出 (README 路线「数据导出」完成)。
+
+### 14.2 队列控制 UI (设置页「下载队列」卡片)
+
+- **限速**: 输入 KB/s (0=不限), 保存即持久化 (`AppConfig.speed_limit`)
+  并实时应用到 DownloadQueue; 启动时 launcher 自动恢复。
+- **暂停/恢复**: 按钮实时切换 `pause_all()/resume_all()`,
+  文案随队列状态同步。
+- `AppConfig` 新增 `speed_limit: int` 字段 (旧配置文件自动兼容缺省 0)。
+
+### 14.3 累计待办状态
+
+- [x] 数据导出 (CSV/JSON) — 本批完成
+- [x] 下载队列管理 (暂停/续传/限速) — 第三、四批完成
+- [x] 搜索全平台 (除小红书, 待 x-s 签名方案)
+- [ ] 内嵌浏览器 (docs/APP_BROWSER_PLAN.md)
+- [ ] 小红书搜索
+
+
+---
+
+## 十五、UI 设计修缮 (2026-10 第五批)
+
+| 类 | 修复 | 说明 |
+|----|------|------|
+| A4 | LogPanel | 只读防误改 + html.escape 防渲染错乱 + 「清空/复制全部」按钮 |
+| A5 | TUI 去硬编码 | `_DOWNLOAD_FEATURES` 名单删除, 改用 `FeatureMeta.emits_work_info` |
+| A2 | FeaturePanel 追加泄漏 | 平台功能迁入独立 `_platform_grid`, 切平台整体重建不再堆积 |
+| A3 | 启用语义 | `set_work_available` 只控制固有按钮, 平台批量按钮不再被误禁 |
+| C1 | format_count 统一 | 4 处重复实现收敛到 `shared/core/format.py::format_count` |
+| A1 | 内联色迁 QSS | InfoRow/UserRow/LogPanel 内联暗色删除, 双主题 QSS 接管 (亮色主题生效) |
+| C2 | QSS 死代码 | 删除旧版侧栏样式段 (#Sidebar*); 补斑马纹 property 选择器与 #EmptyState |
+| B3 | 空态组件 | ListPageBase `show_empty()`; 作品/用户列表空数据显示引导文案 |

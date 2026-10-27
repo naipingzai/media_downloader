@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
 )
 from ..cover_loader import CoverLoader
+from shared.core.format import format_count
 from .cover_label import CoverLabel
 from .work_card import InfoRow, build_full_work_rows
 
@@ -144,17 +145,6 @@ class VideoInfoWidget(QFrame):
         """当前封面地址 (无封面时为空串)。"""
         return self._cur_url
 
-    @staticmethod
-    def _num(v) -> str:
-        try:
-            n = int(v or 0)
-        except (TypeError, ValueError):
-            return "0"
-        if n >= 100000000:
-            return f"{n / 100000000:.1f}亿"
-        if n >= 10000:
-            return f"{n / 10000:.1f}万"
-        return str(n)
 
     def show_work(self, work):
         self._work = work or {}
@@ -180,7 +170,7 @@ class VideoInfoWidget(QFrame):
                            ("view_count", "播放")):
             v = work.get(key)
             if v not in (None, "", 0, "0"):
-                parts.append(f"{label} {self._num(v)}")
+                parts.append(f"{label} {format_count(v)}")
         self._subtitle.setText(" · ".join(parts))
         self._subtitle.setVisible(bool(parts))
         self._state.setText("✓ 已解析")

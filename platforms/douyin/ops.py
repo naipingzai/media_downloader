@@ -21,16 +21,19 @@ class DouyinOps(PlatformOps):
     cookie_hint = "需要完整 Cookie 字符串"
 
     features = [
-        FeatureMeta("download",   "下载单个作品",       True),
-        FeatureMeta("account",    "批量下载账号作品",   True),
-        FeatureMeta("mix",        "批量下载合集作品",   True),
-        FeatureMeta("collection", "批量下载收藏视频",   False),
-        FeatureMeta("collection_album", "批量下载收藏合集", False),
-        FeatureMeta("favorite_folder", "批量下载收藏夹",  True),
-        FeatureMeta("live",       "获取直播拉流地址",   True),
-        FeatureMeta("comment",    "采集作品评论数据",   True),
-        FeatureMeta("user",       "采集账号详细数据",   True),
-        FeatureMeta("search",     "采集搜索结果数据",   True),
+        # emits_work_info: 单作品功能, 结果 data[0] 供 UI 作品资料卡展示
+        # group: work=作品操作 / user=作者操作 / platform=平台功能
+        FeatureMeta("download",   "下载单个作品",       True,
+                    emits_work_info=True, group="work"),
+        FeatureMeta("account",    "批量下载账号作品",   True, group="work"),
+        FeatureMeta("mix",        "批量下载合集作品",   True, group="work"),
+        FeatureMeta("collection", "批量下载收藏视频",   False, group="work"),
+        FeatureMeta("collection_album", "批量下载收藏合集", False, group="work"),
+        FeatureMeta("favorite_folder", "批量下载收藏夹",  True, group="work"),
+        FeatureMeta("live",       "获取直播拉流地址",   True, group="work"),
+        FeatureMeta("comment",    "采集作品评论数据",   True, group="work"),
+        FeatureMeta("user",       "采集账号详细数据",   True, group="user"),
+        FeatureMeta("search",     "采集搜索结果数据",   True, group="platform"),
     ]
 
     async def _get_adapter(self, cookie: str):

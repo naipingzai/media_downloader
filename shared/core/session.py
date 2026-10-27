@@ -1,4 +1,7 @@
 """HTTP 会话工厂。"""
+from __future__ import annotations
+
+import os
 from typing import Optional
 
 from curl_cffi.requests import AsyncSession, Session
@@ -6,6 +9,10 @@ from curl_cffi.requests import AsyncSession, Session
 from .constants import IMPERSONATE, TIMEOUT, USERAGENT
 
 __all__ = ["create_async_client", "create_sync_client", "request_params"]
+
+# SSL 验证开关: 默认开启 (安全)。
+# 仅在明确设置 MD_SSL_VERIFY=0 时关闭 (调试自签名代理场景)。
+_SSL_VERIFY = os.environ.get("MD_SSL_VERIFY", "1") not in ("0", "false", "False")
 
 
 def create_async_client(
@@ -17,11 +24,10 @@ def create_async_client(
 ) -> AsyncSession:
     """创建异步 HTTP 客户端。"""
     from .format import cookie_str_to_dict
-
     cookies = cookie_str_to_dict(cookie) if isinstance(cookie, str) else (cookie or {})
     return AsyncSession(
         timeout=timeout,
-        verify=False,
+        verify=_SSL_VERIFY,
         allow_redirects=True,
         proxy=proxy,
         impersonate=impersonate,
@@ -39,11 +45,10 @@ def create_sync_client(
 ) -> Session:
     """创建同步 HTTP 客户端。"""
     from .format import cookie_str_to_dict
-
     cookies = cookie_str_to_dict(cookie) if isinstance(cookie, str) else (cookie or {})
     return Session(
         timeout=timeout,
-        verify=False,
+        verify=_SSL_VERIFY,
         allow_redirects=True,
         proxy=proxy,
         impersonate=impersonate,
@@ -74,7 +79,7 @@ async def request_params(
         headers=_headers,
         allow_redirects=True,
         timeout=timeout,
-        verify=False,
+        verify=_SSL_VERIFY,
         proxy=proxy,
         impersonate=impersonate,
     ) as client:
@@ -95,4 +100,3 @@ async def request_params(
                 return response
             case _:
                 return response.headers
-

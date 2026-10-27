@@ -1,9 +1,9 @@
 """功能面板 — 每个模块独立带边框分组框 (GroupBox 风格), 按钮网格对齐。
-
 模块:
-  作品操作  (获取链接/查看评论/下载封面 …, 依赖当前作品)
-  作者操作  (获取作品/关注列表/收藏列表/下载头像/获取主页)
-  平台功能  (下载/批量/合集 …, 随平台切换)
+  作品操作  (下载/批量/合集 … + 获取链接/查看评论/下载封面, 依赖当前作品)
+  作者操作  (获取作品/关注列表/收藏列表 … + user 类功能)
+  平台功能  (search/hot …, 随平台切换)
+平台功能按 FeatureMeta.group 自动分发到对应分组, UI 零硬编码。
 """
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
@@ -18,11 +18,9 @@ _BTN_STYLE = (
     " font-weight: bold; }"
     "QPushButton:hover { background: #2563eb; }"
     "QPushButton:disabled { background: #334155; color: #64748b; }")
-
 _GROUP_STYLE = (
     "QFrame#FeatureGroup { background: #1e293b;"
     " border: 1px solid #334155; border-radius: 6px; }")
-
 _TITLE_STYLE = (
     "color: #94a3b8; font-size: 14px; font-weight: bold;"
     " background: transparent; border: none; padding: 0;")
@@ -37,15 +35,12 @@ class FeatureGroup(QFrame):
         self.setStyleSheet(_GROUP_STYLE)
         self._COLS = cols
         self._btns: list[QPushButton] = []
-
         outer = QVBoxLayout(self)
         outer.setContentsMargins(10, 8, 10, 10)
         outer.setSpacing(8)
-
         lbl = QLabel(title)
         lbl.setStyleSheet(_TITLE_STYLE)
         outer.addWidget(lbl)
-
         self._grid = QGridLayout()
         self._grid.setContentsMargins(0, 0, 0, 0)
         self._grid.setSpacing(8)
@@ -64,13 +59,26 @@ class FeatureGroup(QFrame):
                 w.deleteLater()
         self._btns.clear()
         for i, (text, slot) in enumerate(btns):
-            btn = QPushButton(text)
-            btn.setCursor(Qt.PointingHandCursor)
-            btn.setMinimumHeight(36)
-            btn.setStyleSheet(_BTN_STYLE)
-            btn.clicked.connect(lambda _checked=False, s=slot: s())
+            btn = self._new_btn(text, slot)
             self._btns.append(btn)
             self._grid.addWidget(btn, i // self._COLS, i % self._COLS)
+
+    def append_buttons(self, btns):
+        """在现有按钮后追加 (分组渲染用)。"""
+        start = self._grid.count()
+        for i, (text, slot) in enumerate(btns):
+            btn = self._new_btn(text, slot)
+            self._btns.append(btn)
+            n = start + i
+            self._grid.addWidget(btn, n // self._COLS, n % self._COLS)
+
+    def _new_btn(self, text: str, slot) -> QPushButton:
+        btn = QPushButton(text)
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.setMinimumHeight(36)
+        btn.setStyleSheet(_BTN_STYLE)
+        btn.clicked.connect(lambda _checked=False, s=slot: s())
+        return btn
 
     def set_enabled(self, v: bool):
         for b in self._btns:
@@ -81,7 +89,7 @@ class FeatureGroup(QFrame):
 
 
 class FeaturePanel(QWidget):
-    """功能面板 — 三个独立分组框纵向排列。"""
+    """功能面板 — 三个独立分组框纵向排列, 平台功能按 group 自动分发。"""
 
     execute_clicked = Signal(str, str, dict)   # (feature_id, url, opts)
     stop_recording_clicked = Signal()
@@ -94,36 +102,43 @@ class FeaturePanel(QWidget):
         self._feat_btns: dict = {}
         self._stop_btn = None
         self._current_fid = ""
-
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(8)
-
-        # 1) 作品操作 (无作品时禁用)
+        # 1) 作品操作 (无作品时禁用; 平台 group=work 功能运行时并入)
         self._work_group = FeatureGroup("作品操作")
         self._work_group.set_buttons(list(work_buttons or []))
         outer.addWidget(self._work_group)
         self._work_group.set_enabled(False)
-
-        # 2) 作者操作
+        # 2) 作者操作 (平台 group=user 功能并入)
         self._author_group = FeatureGroup("作者操作")
         self._author_group.set_buttons(list(author_buttons or []))
         outer.addWidget(self._author_group)
-
-        # 3) 平台功能 (随平台切换重建)
+        # 3) 平台功能 (group=platform, 随平台切换重建)
         self._feat_group = FeatureGroup("平台功能")
         outer.addWidget(self._feat_group)
-
         outer.addStretch()
 
     def set_features(self, features):
-        """重建平台功能分组。"""
-        btns = [(f.name, (lambda fid=f.id: self._on_click(fid))) for f in features]
-        self._feat_group.set_buttons(btns)
-        # 记录 fid → 按钮 (录制状态联动)
-        self._feat_btns = {}
-        for (name, _slot), btn in zip(btns, self._feat_group._btns):
-            pass  # fid 映射在 _on_click 中通过 lambda 捕获, 这里仅重建
+        """按 FeatureMeta.group 把平台功能分发到对应分组框。
+
+        group=work     → 并入「作品操作」组 (download/account/mix…)
+        group=user     → 并入「作者操作」组 (user/following…)
+        group=platform → 留在「平台功能」组 (search/hot…)
+        旧版 FeatureMeta 无 group 字段时全部落入「平台功能」。
+        """
+        groups: dict[str, list] = {"work": [], "user": [], "platform": []}
+        for f in features or []:
+            g = getattr(f, "group", "platform") or "platform"
+            groups.setdefault(g, []).append(
+                (f.name, (lambda fid=f.id: self._on_click(fid))))
+        # 平台功能组整体重建
+        self._feat_group.set_buttons(groups.get("platform", []))
+        # work/user 功能追加到既有分组 (保留固有按钮)
+        if groups.get("work"):
+            self._work_group.append_buttons(groups["work"])
+        if groups.get("user"):
+            self._author_group.append_buttons(groups["user"])
         self._stop_btn = None
         self._recording = False
 
@@ -136,9 +151,6 @@ class FeaturePanel(QWidget):
         self._recording = recording
         if self._stop_btn:
             self._stop_btn.setVisible(recording)
-        # 录制中禁用平台功能组 (避免并发), 结束恢复
-        for b in self._feat_group._btns:
-            b.setEnabled(not recording or True)  # 保留可点其他功能, 直播按钮由 stop 控制
 
     def _on_click(self, fid: str):
         if fid in LIVE_FEATURES and self._recording:

@@ -13,12 +13,16 @@ from .constants import (
 from .retry import Retry
 from .session import create_async_client, create_sync_client
 from .format import cookie_str_to_dict, cookie_dict_to_str
-from .error import DownloaderError, CacheError
+from .error import (
+    AuthError, CacheError, DownloaderError, FatalError,
+    RateLimitedError, RetryableError,
+)
+from .secret import decrypt_value, encrypt_value
 from .ffmpeg import FFmpegManager
 from .cookies import CookieManager
 from .login import LoginBus, PlatformLoginManager
 from .config import AppConfig, ConfigManager
-from .i18n import t as i18n_t, platform_name, PLATFORM_NAMES
+from .i18n import platform_name, PLATFORM_NAMES
 from .ops import FeatureMeta, FeatureResult, PlatformBus, PlatformOps
 from .adapter import norm_work, norm_user, norm_comment
 
@@ -33,10 +37,12 @@ __all__ = [
     "Retry",
     "create_async_client", "create_sync_client",
     "cookie_str_to_dict", "cookie_dict_to_str",
-    "DownloaderError", "CacheError",
+    "DownloaderError", "CacheError", "RetryableError", "RateLimitedError",
+    "AuthError", "FatalError",
     "FFmpegManager", "CookieManager", "LoginBus", "PlatformLoginManager",
     "AppConfig", "ConfigManager",
-    "i18n_t", "platform_name", "PLATFORM_NAMES",
+    "platform_name", "PLATFORM_NAMES",
+    "encrypt_value", "decrypt_value",
     "FeatureMeta", "FeatureResult", "PlatformBus", "PlatformOps",
     "norm_work", "norm_user", "norm_comment",
 ]

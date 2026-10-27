@@ -92,10 +92,7 @@ class InfoRow(QFrame):
 
     def __init__(self, label: str, value: str, parent=None):
         super().__init__(parent)
-        self.setObjectName("InfoRow")
-        self.setStyleSheet(
-            "QFrame#InfoRow { background: #1e293b;"
-            " border: 1px solid #334155; border-radius: 4px; }")
+        self.setObjectName("InfoRow")  # 样式由主题 QSS #InfoRow 提供
         lay = QHBoxLayout(self)
         lay.setContentsMargins(8, 4, 8, 4)
         lay.setSpacing(8)

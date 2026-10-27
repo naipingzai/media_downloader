@@ -19,11 +19,14 @@ class KuaishouOps(PlatformOps):
     cookie_hint = "需要 Cookie"
 
     features = [
-        FeatureMeta("download",   "下载单个作品",       True),
-        FeatureMeta("account",    "批量下载账号作品",   True),
-        FeatureMeta("collection", "批量下载收藏作品",   False),
-        FeatureMeta("user",       "采集账号详细数据",   True),
-        FeatureMeta("following",  "采集关注列表",       True),
+        # emits_work_info: 单作品功能, 结果 data[0] 供 UI 作品资料卡展示
+        # group: work=作品操作 / user=作者操作 / platform=平台功能
+        FeatureMeta("download",   "下载单个作品",       True,
+                    emits_work_info=True, group="work"),
+        FeatureMeta("account",    "批量下载账号作品",   True, group="work"),
+        FeatureMeta("collection", "批量下载收藏作品",   False, group="work"),
+        FeatureMeta("user",       "采集账号详细数据",   True, group="user"),
+        FeatureMeta("following",  "采集关注列表",       True, group="user"),
     ]
 
     async def _get_adapter(self, cookie: str):

@@ -62,36 +62,6 @@ QSplitter::handle:horizontal { width: 6px; }
 }
 #TopToolBtn:pressed { background: #1d4ed8; color: white; }
 
-/* (旧版侧栏样式) */
-#Sidebar { background: #0f172a; border-right: 1px solid #334155; }
-#BrandSubtitle { color: #64748b; font-size: 12px; background: transparent; padding-left: 2px; }
-#VersionLabel { color: #64748b; font-size: 12px; padding-left: 4px; }
-#GroupTitle {
-    color: #94a3b8; font-size: 12px; font-weight: bold;
-    background: transparent; padding: 2px 4px;
-}
-#SideGroup {
-    background: #1e293b;
-    border: 1px solid #334155;
-    border-radius: 8px;
-}
-#SidebarButton {
-    background: #0f172a;
-    color: #cbd5e1;
-    border: 1px solid #334155;
-    border-radius: 6px;
-    padding: 8px 10px;
-    font-size: 14px;
-    text-align: left;
-}
-#SidebarButton:hover { background: #334155; border-color: #475569; color: #f1f5f9; }
-#SidebarButton[active="true"] {
-    background: #22314a;
-    border-color: #38bdf8;
-    color: #38bdf8;
-    font-weight: bold;
-}
-#SidebarButton:pressed { background: #1d4ed8; }
 
 /* ---------- 面板 (SectionPanel) ---------- */
 #SectionPanel {
@@ -342,3 +312,12 @@ QTextEdit {
     border: 1px solid #334155;
     border-radius: 6px;
 }
+
+/* ---------- 列表斑马纹 (property zebra) ---------- */
+#UserTableRow[zebra="odd"] { background: #16213a; }
+#UserTableRow[zebra="even"] { background: #1e293b; }
+#LogPanel { background: #0f172a; border: 1px solid #334155; border-radius: 6px; }
+
+/* ---------- 空态 ---------- */
+#EmptyState { color: #64748b; padding: 40px 20px;
+             background: transparent; border: none; }

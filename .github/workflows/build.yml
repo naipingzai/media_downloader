@@ -16,8 +16,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  test:
+    name: Lint & Test
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest ruff
+      - name: Lint (ruff)
+        run: ruff check shared/ platforms/ ui/ main.py --exit-zero
+      - name: Unit tests
+        run: python -m pytest tests/ -v
+
   build:
     name: Build (${{ matrix.platform }})
+    needs: test
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     strategy:

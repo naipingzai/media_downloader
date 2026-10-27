@@ -45,6 +45,12 @@ def launch():
     from shared.core.config import ConfigManager
     cfg = ConfigManager.load()
     _apply_font(app, cfg.font_size)
+    # 下载队列限速: 启动即应用持久化配置
+    try:
+        from shared.flow.queue import get_queue
+        get_queue().set_speed_limit(int(getattr(cfg, "speed_limit", 0) or 0))
+    except Exception:
+        pass
 
     icon = _find_check_icon()
     icon_url = icon.as_posix() if icon else ""

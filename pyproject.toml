@@ -14,6 +14,7 @@ dependencies = [
     "qrcode[pil]>=7.4",
     "Pillow>=10.0",
     "textual>=0.60",
+    "cryptography>=42.0",
 ]
 
 [project.scripts]

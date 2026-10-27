@@ -1,15 +1,12 @@
 """内嵌数据表格页 —— 评论/搜索结果等任意数据 (继承 ListPageBase 公共设计)。"""
 from __future__ import annotations
-
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel
-
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton
 from .base_page import ListPageBase
 
 
 class _Row(QFrame):
     """单行: 多列单元格。"""
-
     def __init__(self, cells: list, odd: bool, weights: list | None = None,
                  parent=None):
         super().__init__(parent)
@@ -32,11 +29,12 @@ class _Row(QFrame):
 
 
 class DataTablePage(ListPageBase):
-    """通用数据表格内嵌页。"""
-
+    """通用数据表格内嵌页 (支持 CSV/JSON 导出)。"""
     def __init__(self, title: str = "数据", parent=None):
         super().__init__(title=title, parent=parent)
         self._weights: list | None = None
+        self._headers: list[str] = []
+        self._rows: list[list] = []
         # 表头 (固定在内容区顶部)
         self._header = QHBoxLayout()
         self._header.setContentsMargins(12, 6, 12, 6)
@@ -55,6 +53,8 @@ class DataTablePage(ListPageBase):
         if title is not None:
             self.set_title(title)
         self._weights = weights
+        self._headers = [str(h) for h in headers]
+        self._rows = [list(r) for r in rows]
         # 表头
         while self._header.count():
             it = self._header.takeAt(0)
@@ -77,4 +77,14 @@ class DataTablePage(ListPageBase):
         for i, cells in enumerate(rows):
             self.add_content(_Row(list(cells), odd=(i % 2 == 1),
                                   weights=weights))
-        self.set_count(f"共 {len(rows)} 条")
+        self.set_count(f"共 {len(rows)} 条 · 可导出")
+
+    # ---------------- 导出 ----------------
+    def _export(self):
+        """导出当前表格数据 (CSV/JSON, 系统保存对话框)。"""
+        if not self._rows:
+            return
+        from shared.flow.export import export_dialog
+        export_dialog(self, self._headers, self._rows,
+                      suggested_name=(self._title.text() if hasattr(self, "_title")
+                                      else "export") or "export")

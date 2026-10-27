@@ -45,7 +45,7 @@ from .pages.settings_page import SettingsPage
 from .resources import theme as _theme
 
 
-APP_VERSION_LABEL = "MediaDownloader V1.0 Beta"
+APP_VERSION_LABEL = PROJECT_NAME  # 版本号统一由 shared.core.constants 派生
 
 
 # ===================== 后台任务 =====================

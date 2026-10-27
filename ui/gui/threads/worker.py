@@ -1,7 +1,11 @@
 """FeatureWorker - 后台执行线程，调用 PlatformBus。"""
+from __future__ import annotations
+
 import asyncio
 import threading
+import uuid
 from pathlib import Path
+
 from PySide6.QtCore import QObject, QRunnable, Signal
 
 
@@ -24,14 +28,24 @@ class FeatureWorker(QRunnable):
         self.selected = selected  # 批量预览后用户勾选的 work_id 列表
         self.signals = WorkerSignals()
         self.stop_event = threading.Event()  # 用于通知录制停止
+        # 任务唯一标识: FileDownloader 以此注册到 DownloadQueue,
+        # UI 停止按钮 → stop() → 队列按 task_key 前缀停止所有下载
+        self.task_key = f"{platform}:{feature_id}:{uuid.uuid4().hex[:8]}"
         self.setAutoDelete(True)
 
     def stop(self):
-        """外部调用：通知录制线程停止。"""
+        """外部调用：通知录制停止 + 停止队列中本任务的下载。"""
         self.stop_event.set()
+        try:
+            from shared.flow.queue import get_queue
+            get_queue().stop_task(self.task_key)
+        except Exception:
+            pass
 
     def run(self):
+        from shared.core.logger import get_logger
         from shared.core.ops import PlatformBus
+        log = get_logger("gui.worker")
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
@@ -44,20 +58,20 @@ class FeatureWorker(QRunnable):
         try:
             result = loop.run_until_complete(
                 PlatformBus.run(self.platform, self.feature_id,
-                              self.url, self.cookie, self.save_dir,
-                              on_log=_emit_log, selected=self.selected,
-                              stop_event=self.stop_event)
+                                self.url, self.cookie, self.save_dir,
+                                on_log=_emit_log, selected=self.selected,
+                                stop_event=self.stop_event,
+                                task_key=self.task_key)
             )
             # emit remaining log lines that weren't streamed
             for line in result.log:
                 self.signals.log_line.emit(line)
-            # 只有下载相关功能才更新作品资料卡；批量预览（preview=batch）
-            # 的 data 是待选列表，不作为单作品资料。
-            download_features = {"download", "account", "series", "collection",
-                                 "collection_album", "mix", "live", "tk_download",
-                                 "ks_download", "xhs_download"}
+            # 是否更新作品资料卡: 由 FeatureMeta.emits_work_info 声明驱动
+            # (UI 零硬编码功能名单; 批量预览 data 是待选列表, 不作单作品资料)
+            meta = PlatformBus.get_feature(self.platform, self.feature_id)
+            emits_work_info = bool(meta and meta.emits_work_info)
             if (result.data and len(result.data) > 0
-                    and self.feature_id in download_features
+                    and emits_work_info
                     and not result.preview):
                 self.signals.work_info.emit(result.data[0])
             self.signals.finished.emit({
@@ -69,6 +83,18 @@ class FeatureWorker(QRunnable):
                 "preview": result.preview,
             })
         except Exception as e:
+            log.exception("功能执行异常: %s/%s", self.platform, self.feature_id)
             self.signals.error.emit(str(e))
         finally:
+            # 注销本任务在队列中的句柄
+            try:
+                from shared.flow.queue import get_queue
+                get_queue().stop_task(self.task_key)  # 置停止, 防悬挂
+                q = get_queue()
+                with q._lock:
+                    for k in [k for k in q._handles
+                              if str(k).startswith(self.task_key)]:
+                        q._handles.pop(k, None)
+            except Exception:
+                pass
             loop.close()

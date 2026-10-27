@@ -65,6 +65,13 @@ class ListPageBase(QWidget):
         self._footer_actions.setSpacing(8)
         self._footer.addLayout(self._footer_actions)
         root.addLayout(self._footer)
+        # ---- 空态组件 (数据为空时显示, 有数据时隐藏) ----
+        self._empty = QLabel("")
+        self._empty.setObjectName("EmptyState")
+        self._empty.setAlignment(Qt.AlignCenter)
+        self._empty.setWordWrap(True)
+        self._empty.setVisible(False)
+        root.addWidget(self._empty)
 
     # ---------- 子类辅助 ----------
     def set_title(self, text: str):
@@ -104,3 +111,18 @@ class ListPageBase(QWidget):
     def add_content(self, widget: QWidget):
         """在内容区追加子控件 (插到尾部 stretch 之前)。"""
         self._content.insertWidget(self._content.count() - 1, widget)
+        self._empty.setVisible(False)
+
+    def show_empty(self, text: str = "暂无数据", hint: str = ""):
+        """显示空态提示 (隐藏滚动区)。"""
+        self._scroll.setVisible(False)
+        msg = f"<p style='font-size:16px; font-weight:bold;'>{text}</p>"
+        if hint:
+            msg += f"<p style='font-size:13px;'>{hint}</p>"
+        self._empty.setText(msg)
+        self._empty.setVisible(True)
+
+    def ensure_content(self):
+        """有数据时恢复内容区可见 (add_content 自动调用)。"""
+        self._scroll.setVisible(True)
+        self._empty.setVisible(False)

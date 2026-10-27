@@ -19,13 +19,17 @@ class BilibiliOps(PlatformOps):
     cookie_hint = "需要 SESSDATA Cookie（从浏览器 DevTools 复制）"
 
     features = [
-        FeatureMeta("download",        "下载单个视频",       True),
-        FeatureMeta("account",         "批量下载用户作品",   True),
-        FeatureMeta("series",          "批量下载合集/系列",  True),
-        FeatureMeta("collection",      "下载默认收藏夹",     False),
-        FeatureMeta("favorite_folders","列出所有收藏夹",     False),
-        FeatureMeta("comment",         "采集视频评论",       True),
-        FeatureMeta("user",            "采集用户资料",       True),
+        # emits_work_info: 单作品功能, 结果 data[0] 供 UI 作品资料卡展示
+        # group: work=作品操作 / user=作者操作 / platform=平台功能
+        FeatureMeta("download",        "下载单个视频",       True,
+                    emits_work_info=True, group="work"),
+        FeatureMeta("account",         "批量下载用户作品",   True, group="work"),
+        FeatureMeta("series",          "批量下载合集/系列",  True, group="work"),
+        FeatureMeta("collection",      "下载默认收藏夹",     False, group="work"),
+        FeatureMeta("favorite_folders","列出所有收藏夹",     False, group="work"),
+        FeatureMeta("comment",         "采集视频评论",       True, group="work"),
+        FeatureMeta("user",            "采集用户资料",       True, group="user"),
+        FeatureMeta("search",          "搜索视频并下载",     True, group="platform"),
     ]
 
     async def _get_adapter(self, cookie: str):
@@ -274,6 +278,41 @@ class BilibiliOps(PlatformOps):
         else:
             result = await dl.download_file(urls[0], target.name)
             return str(result) if result else None
+
+    async def _do_search(self, url, cookie, save_dir, selected=None) -> FeatureResult:
+        """搜索视频并下载。url = 搜索关键词。
+
+        两阶段: selected=None → 返回预览勾选列表; 否则下载勾选项。
+        """
+        adapter = await self._get_adapter(cookie)
+        storage = ConfigManager.get_storage_ops("bilibili")
+        try:
+            keyword = url.strip()
+            if not keyword:
+                return FeatureResult(False, "请输入搜索关键词")
+            cache_key = f"bl_search:{keyword}"
+            videos = self._cache_get(cache_key)
+            if videos is None:
+                videos = await adapter.fetch_search(keyword, page=1, max_count=30)
+                if not videos:
+                    return FeatureResult(
+                        False,
+                        f"搜索 \"{keyword}\" 无结果或被风控 (可尝试配置 SESSDATA Cookie)")
+                self._cache_put(cache_key, videos)
+            if selected is None:
+                items = [self._video_preview(v) for v in videos]
+                return FeatureResult(True, f"搜索 \"{keyword}\" 共 {len(items)} 条，待选择下载",
+                                     data=items, preview="batch")
+            # 第二阶段: 下载勾选
+            sel = {str(s) for s in selected}
+            targets = [v for v in videos if self._video_id(v) in sel]
+            if not targets:
+                return FeatureResult(False, "未匹配到勾选的作品（列表可能已过期，请重新搜索）")
+            log = [f"下载搜索结果: {keyword}"]
+            return await self._batch_download(adapter, targets, storage, log,
+                                              selected=selected)
+        finally:
+            await adapter.close()
 
     # ── 工具方法 ──
 

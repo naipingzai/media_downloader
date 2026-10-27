@@ -34,3 +34,16 @@ def format_size(size: int | float) -> str:
             return f"{size:.2f} {unit}"
         size /= 1024
     return f"{size:.2f} PB"
+
+
+def format_count(n) -> str:
+    """将计数格式化为可读字符串 (1.2万 / 3.4亿), 无效输入返回 "0"。"""
+    try:
+        n = int(n or 0)
+    except (TypeError, ValueError):
+        return "0"
+    if n >= 100_000_000:
+        return f"{n / 100_000_000:.1f}亿"
+    if n >= 10_000:
+        return f"{n / 10_000:.1f}万"
+    return str(n)

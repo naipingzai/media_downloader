@@ -6,19 +6,10 @@ from PySide6.QtGui import QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
 from ..cover_loader import CoverLoader
+from shared.core.format import format_count as _fmt
 from .base_page import ListPageBase
 
 
-def _fmt(n) -> str:
-    try:
-        n = int(n or 0)
-    except (TypeError, ValueError):
-        return "0"
-    if n >= 100_000_000:
-        return f"{n / 100_000_000:.1f}亿"
-    if n >= 10_000:
-        return f"{n / 10_000:.1f}万"
-    return str(n)
 
 
 def _rounded_pixmap(pix: QPixmap, size: int = 44) -> QPixmap:
@@ -43,11 +34,8 @@ class _UserRow(QFrame):
         super().__init__(parent)
         self.setObjectName("UserTableRow")
         self._avatar_url = user.get("avatar") or ""
-        bg = "#16213a" if odd else "#1e293b"
-        self.setStyleSheet(
-            f"QFrame#UserTableRow {{ background: {bg};"
-            " border: 1px solid #334155; border-radius: 6px; }"
-            "QLabel { background: transparent; border: none; }")
+        # 斑马纹经 property 提供, 颜色由主题 QSS [zebra="odd"] 控制
+        self.setProperty("zebra", "odd" if odd else "even")
         lay = QHBoxLayout(self)
         lay.setContentsMargins(10, 8, 10, 8)
         lay.setSpacing(12)
@@ -106,6 +94,10 @@ class UsersPage(ListPageBase):
         if title is not None:
             self.set_title(f"{title} · 共 {len(users)} 人")
         self.clear_content()
+        if not users:
+            self.show_empty("暂无用户", "关注列表 / 收藏列表需要先登录并配置 Cookie")
+            self.set_count("共 0 人")
+            return
         for i, u in enumerate(users):
             self.add_content(_UserRow(u, odd=(i % 2 == 1)))
         self.set_count(f"共 {len(users)} 人")

@@ -188,3 +188,12 @@ QHeaderView::section { background: #f1f5f9; color: #475569; border: none; border
 /* ---------- 日志 ---------- */
 QTextEdit { background: transparent; color: #0f172a; font-family: monospace; font-size: 14px; border: none; }
 #CollapsibleLog { background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; }
+
+/* ---------- 列表斑马纹 (property zebra) ---------- */
+#UserTableRow[zebra="odd"] { background: #eef2f7; }
+#UserTableRow[zebra="even"] { background: #ffffff; }
+#LogPanel { background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; }
+
+/* ---------- 空态 ---------- */
+#EmptyState { color: #94a3b8; padding: 40px 20px;
+             background: transparent; border: none; }
