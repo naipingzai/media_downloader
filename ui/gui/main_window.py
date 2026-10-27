@@ -323,8 +323,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(PROJECT_NAME)
-        self.setMinimumSize(1180, 760)
-        self.resize(1380, 900)
+        # 固定窗口大小 (禁 resize, 布局恒定不重排)
+        self.setFixedSize(1280, 860)
         self.menuBar().setVisible(False)
         PlatformBus  # force import (side effect 注册平台)
         from platforms import load_all_platforms
@@ -365,9 +365,7 @@ class MainWindow(QMainWindow):
     # ----------------
     def _setup_ui(self):
         central = QWidget()
-        # 等比缩放: 窗口 resize 时全 UI 整体等比压缩/放大 (布局相对位置恒定)
-        from .widgets.scaled_view import ScaledContentView
-        self.setCentralWidget(ScaledContentView(central, design_size=(1380, 900)))
+        self.setCentralWidget(central)
         v = QVBoxLayout(central)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
