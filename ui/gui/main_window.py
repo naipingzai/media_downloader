@@ -365,7 +365,9 @@ class MainWindow(QMainWindow):
     # ----------------
     def _setup_ui(self):
         central = QWidget()
-        self.setCentralWidget(central)
+        # 等比缩放: 窗口 resize 时全 UI 整体等比压缩/放大 (布局相对位置恒定)
+        from .widgets.scaled_view import ScaledContentView
+        self.setCentralWidget(ScaledContentView(central, design_size=(1380, 900)))
         v = QVBoxLayout(central)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
