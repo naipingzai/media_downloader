@@ -3,6 +3,7 @@
 统一设计:
   ┌────────────────────────────────────────┐
   │ 标题                    共 N 条  [按钮]│ ← 页头 (统一)
+  │ 🔍 [过滤关键词…                      ] │ ← 过滤框 (enable_filter 开启)
   ├────────────────────────────────────────┤
   │                                        │
   │   内容区 (仅纵向滚动, 无横向滚动)        │ ← 子类填充
@@ -13,12 +14,13 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QHBoxLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget,
+    QHBoxLayout, QLabel, QLineEdit, QPushButton, QScrollArea,
+    QVBoxLayout, QWidget,
 )
 
 
 class ListPageBase(QWidget):
-    """列表内嵌页基类 —— 页头/滚动区/页脚统一, 子类只填内容。"""
+    """列表内嵌页基类 —— 页头/过滤/滚动区/页脚统一, 子类只填内容。"""
 
     def __init__(self, title: str = "", parent=None):
         super().__init__(parent)
@@ -40,6 +42,18 @@ class ListPageBase(QWidget):
         self._header_actions.setSpacing(8)
         hdr.addLayout(self._header_actions)
         root.addLayout(hdr)
+
+        # ---- 过滤框 (子类 enable_filter() 开启) ----
+        self._filter_row = QHBoxLayout()
+        self._filter_row.setSpacing(8)
+        self._filter_le = QLineEdit()
+        self._filter_le.setPlaceholderText("🔍 输入关键词过滤 (标题/作者)…")
+        self._filter_le.setObjectName("FilterInput")
+        self._filter_le.setClearButtonEnabled(True)
+        self._filter_le.textChanged.connect(self._on_filter_changed)
+        self._filter_row.addWidget(self._filter_le, 1)
+        self._filter_row.setVisible(False)
+        root.addLayout(self._filter_row)
 
         # ---- 内容区: 仅纵向滚动 ----
         self._scroll = QScrollArea()
@@ -99,6 +113,22 @@ class ListPageBase(QWidget):
         layout.addWidget(b)
         return b
 
+    # ---------- 过滤 ----------
+    def enable_filter(self, placeholder: str = "🔍 输入关键词过滤…"):
+        """开启页头过滤框 (子类覆写 _apply_filter 响应)。"""
+        self._filter_le.setPlaceholderText(placeholder)
+        self._filter_row.setVisible(True)
+
+    def filter_text(self) -> str:
+        return self._filter_le.text().strip().lower()
+
+    def _on_filter_changed(self, _text: str):
+        self._apply_filter(self.filter_text())
+
+    def _apply_filter(self, keyword: str):
+        """子类覆写: 按 keyword 显隐内容项。"""
+
+    # ---------- 内容 ----------
     def clear_content(self):
         """清空内容区 (保留尾部 stretch)。"""
         while self._content.count():

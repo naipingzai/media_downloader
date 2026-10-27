@@ -121,6 +121,7 @@ class WorkCardWidget(QFrame):
 
     def __init__(self, work: dict, checked: bool = True, parent=None):
         super().__init__(parent)
+        self._work = work  # 原始数据 (列表过滤用)
         self._work_id = str(work.get("work_id", ""))
         cov = (work.get("cover_url") or work.get("cover")
                or work.get("pic") or "")

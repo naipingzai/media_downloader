@@ -6,6 +6,7 @@ from PySide6.QtGui import QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
 from ..cover_loader import CoverLoader
+from shared.core.format import format_count
 from shared.core.format import format_count as _fmt
 from .base_page import ListPageBase
 

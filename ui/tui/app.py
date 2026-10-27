@@ -33,6 +33,7 @@ from shared.core import (
     platform_name as _pn,
 )
 from platforms import load_all_platforms
+from shared.core.format import format_count as fmt_count
 from .screens import (
     BatchSelectScreen, DataTableScreen, LoginScreen, SettingsScreen,
     TaskScreen,
@@ -40,18 +41,6 @@ from .screens import (
 
 APP_VERSION_LABEL = "TUI"
 
-
-
-def fmt_count(n) -> str:
-    try:
-        n = int(n or 0)
-    except (TypeError, ValueError):
-        return "0"
-    if n >= 100000000:
-        return f"{n / 100000000:.1f}亿"
-    if n >= 10000:
-        return f"{n / 10000:.1f}万"
-    return str(n)
 
 
 class TuiApp(App):

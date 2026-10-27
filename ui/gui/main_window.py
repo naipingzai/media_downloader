@@ -337,6 +337,7 @@ class MainWindow(QMainWindow):
         self._pool.setMaxThreadCount(2)
         self._setup_pages()        # 先建可复用页 (login/settings 单例)
         self._setup_status_bar()
+        self._setup_queue_timer()
         self._setup_ui()           # 再建主 UI
 
     # ---------------- 可复用页 ----------------
@@ -609,6 +610,29 @@ class MainWindow(QMainWindow):
         return fp
 
     # ---------------- 状态栏 ----------------
+    def _setup_queue_timer(self):
+        """每秒轮询下载队列, 驱动日志面板进度条与状态栏任务数。"""
+        from PySide6.QtCore import QTimer
+        self._queue_timer = QTimer(self)
+        self._queue_timer.timeout.connect(self._poll_queue)
+        self._queue_timer.start(1000)
+
+    def _poll_queue(self):
+        try:
+            from shared.flow.queue import get_queue
+            st = get_queue().status()
+        except Exception:
+            return
+        if st:
+            done = sum(1 for s in st if s["total"] and s["downloaded"] >= s["total"])
+            cur = sum(min(s["downloaded"], s["total"] or s["downloaded"]) for s in st)
+            total = sum(s["total"] or 0 for s in st)
+            if total:
+                self._log.set_progress(cur, total)
+            self._cookie_hint.setText(f"下载任务 {len(st)} 个 (完成 {done})")
+        elif hasattr(self, "_cookie_hint"):
+            self._log.set_progress(0, 0)
+
     def _setup_status_bar(self):
         sb = self.statusBar()
         sb.setObjectName("StatusBar")

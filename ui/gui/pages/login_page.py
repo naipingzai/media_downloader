@@ -32,6 +32,8 @@ class LoginPage(QWidget):
         self._qr_refresh_btn = None
         self._cookie_input = None
         self._cookie_status = None
+        self._masked = False
+        self._real_cookie = ""
         self._poll_timer = QTimer(self)
         self._poll_timer.timeout.connect(self._poll_qr)
         self._manager = None
@@ -181,6 +183,18 @@ class LoginPage(QWidget):
         self._cookie_input.setMinimumHeight(120)
         self._cookie_input.textChanged.connect(self._on_cookie_text_changed)
         lay.addWidget(self._cookie_input)
+        # 显示/隐藏切换 (掩码显示, 防旁人窥屏)
+        self._masked = False
+        self._real_cookie = current or ""
+        self._mask_btn = QPushButton("隐藏")
+        self._mask_btn.setObjectName("PageGhostButton")
+        self._mask_btn.setCursor(Qt.PointingHandCursor)
+        self._mask_btn.setFixedHeight(24)
+        self._mask_btn.clicked.connect(self._toggle_mask)
+        mask_row = QHBoxLayout()
+        mask_row.addStretch()
+        mask_row.addWidget(self._mask_btn)
+        lay.addLayout(mask_row)
 
         # 操作按钮
         btns = QHBoxLayout()
@@ -200,6 +214,39 @@ class LoginPage(QWidget):
 
         self._update_cookie_status(current or "")
         return card
+
+    def _toggle_mask(self):
+        """切换 Cookie 明文/掩码显示。掩码时输入框只读, 切回明文还原。"""
+        if self._cookie_input is None:
+            return
+        if not self._masked:
+            self._real_cookie = self._cookie_input.toPlainText()
+            if self._real_cookie:
+                self._cookie_input.setPlainText("•" * min(len(self._real_cookie), 128))
+            self._cookie_input.setReadOnly(True)
+            self._masked = True
+            self._mask_btn.setText("显示")
+        else:
+            self._cookie_input.setReadOnly(False)
+            self._cookie_input.setPlainText(self._real_cookie)
+            self._masked = False
+            self._mask_btn.setText("隐藏")
+
+    def _toggle_mask(self):
+        if self._cookie_input is None:
+            return
+        if not self._masked:
+            self._real_cookie = self._cookie_input.toPlainText()
+            if self._real_cookie:
+                self._cookie_input.setPlainText("•" * min(len(self._real_cookie), 128))
+            self._cookie_input.setReadOnly(True)
+            self._masked = True
+            self._mask_btn.setText("显示")
+        else:
+            self._cookie_input.setReadOnly(False)
+            self._cookie_input.setPlainText(self._real_cookie)
+            self._masked = False
+            self._mask_btn.setText("隐藏")
 
     def _on_cookie_text_changed(self):
         self._update_cookie_status(self._cookie_input.toPlainText())
@@ -304,6 +351,8 @@ class LoginPage(QWidget):
     def _save_cookie(self):
         if self._cookie_input is None:
             return
+        if self._masked:
+            self._toggle_mask()  # 还原明文再取值
         text = self._cookie_input.toPlainText().strip()
         if not text:
             self._update_cookie_status("")
@@ -326,6 +375,8 @@ class LoginPage(QWidget):
                 " background: transparent; border: none;")
 
     def _clear_cookie(self):
+        if self._masked:
+            self._toggle_mask()
         self._cm.set(self._platform, "")
         if self._cookie_input is not None:
             self._cookie_input.setPlainText("")
