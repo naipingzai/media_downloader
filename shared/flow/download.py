@@ -1,4 +1,4 @@
-"""Step 4: 文件下载 —— 并发 + 进度 + 校验 + 断点续传。"""
+"""Step 4: 文件下载 —— 并发 + 进度 + 校验 + 断点续传 + 队列控制。"""
 from __future__ import annotations
 
 import asyncio
@@ -15,6 +15,7 @@ class FileDownloader:
     """统一的文件下载器。
 
     支持: 并发控制 / 断点续传 (Range) / 完整性校验 / 进度回调
+          / 队列控制 (暂停·恢复·按任务停止·全局限速, 经 shared.flow.queue)
     """
 
     CHUNK_SIZE = 2 * 1024 * 1024  # 2MB
@@ -26,6 +27,7 @@ class FileDownloader:
         max_retry: int = 5,
         timeout: int = 30,
         max_workers: int = 4,
+        task_key: str = "",
         on_progress: Callable[[str, int, int], None] | None = None,
     ):
         self.client = client
@@ -33,9 +35,25 @@ class FileDownloader:
         self.max_retry = max_retry
         self.timeout = timeout
         self.on_progress = on_progress
-        # 信号量实例化 (原为类属性: 全实例共享, 且与 max_workers 配置脱节)
+        # task_key: 功能执行标识, 供 DownloadQueue 按任务停止 (UI 停止按钮)
+        self.task_key = task_key
+        self._handle = None
+        self._queue = None
+        try:
+            from .queue import DownloadHandle, get_queue
+            self._queue = get_queue()
+            self._handle = DownloadHandle(name=save_dir.name)
+            self._queue.register(task_key or id(self), self._handle)
+        except Exception:
+            self._handle = None
+        # 信号量实例化 (全实例独立, 支持按配置 max_workers 控制)
         self._semaphore = asyncio.Semaphore(max(1, max_workers))
         self.save_dir.mkdir(parents=True, exist_ok=True)
+
+    @property
+    def stopped(self) -> bool:
+        """当前下载是否被队列停止 (UI 停止按钮 / stop_all)。"""
+        return bool(self._handle and self._handle.stopped)
 
     async def download_file(
         self,
@@ -92,12 +110,28 @@ class FileDownloader:
         elif downloaded:
             # 200 全量响应: 丢弃旧 partial
             downloaded = 0
+        if self._handle:
+            self._handle.total = total
 
         mode = "ab" if resumed else "wb"
         async with aiofiles.open(temp, mode) as f:
             async for chunk in resp.aiter_content(chunk_size=self.CHUNK_SIZE):
+                # 队列控制: 停止 → 中断; 暂停 → 异步挂起; 限速 → chunk 间节流
+                if self.stopped:
+                    raise InterruptedError(f"下载已停止: {target.name}")
+                if self._queue and self._queue.paused:
+                    while self._queue.paused and not self.stopped:
+                        await asyncio.sleep(0.2)
+                    if self.stopped:
+                        raise InterruptedError(f"下载已停止: {target.name}")
+                if self._queue and self._queue.speed_limit > 0:
+                    delay = self.CHUNK_SIZE / (self._queue.speed_limit * 1024)
+                    if delay > 0.01:
+                        await asyncio.sleep(min(delay, 10.0))
                 await f.write(chunk)
                 downloaded += len(chunk)
+                if self._handle:
+                    self._handle.downloaded = downloaded
                 if self.on_progress:
                     self.on_progress(target.name, downloaded, total)
 

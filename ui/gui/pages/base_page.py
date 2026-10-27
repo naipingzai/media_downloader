@@ -5,9 +5,7 @@
   │ 标题                    共 N 条  [按钮]│ ← 页头 (统一)
   │ 🔍 [过滤关键词…                      ] │ ← 过滤框 (enable_filter 开启)
   ├────────────────────────────────────────┤
-  │                                        │
   │   内容区 (仅纵向滚动, 无横向滚动)        │ ← 子类填充
-  │                                        │
   └────────────────────────────────────────┘
 """
 from __future__ import annotations
@@ -44,7 +42,11 @@ class ListPageBase(QWidget):
         root.addLayout(hdr)
 
         # ---- 过滤框 (子类 enable_filter() 开启) ----
-        self._filter_row = QHBoxLayout()
+        # 注意: QLayout 没有 setVisible, 必须包 QWidget 容器控制显隐
+        self._filter_box = QWidget()
+        self._filter_box.setVisible(False)
+        self._filter_row = QHBoxLayout(self._filter_box)
+        self._filter_row.setContentsMargins(0, 0, 0, 0)
         self._filter_row.setSpacing(8)
         self._filter_le = QLineEdit()
         self._filter_le.setPlaceholderText("🔍 输入关键词过滤 (标题/作者)…")
@@ -52,8 +54,7 @@ class ListPageBase(QWidget):
         self._filter_le.setClearButtonEnabled(True)
         self._filter_le.textChanged.connect(self._on_filter_changed)
         self._filter_row.addWidget(self._filter_le, 1)
-        self._filter_row.setVisible(False)
-        root.addLayout(self._filter_row)
+        root.addWidget(self._filter_box)
 
         # ---- 内容区: 仅纵向滚动 ----
         self._scroll = QScrollArea()
@@ -117,7 +118,7 @@ class ListPageBase(QWidget):
     def enable_filter(self, placeholder: str = "🔍 输入关键词过滤…"):
         """开启页头过滤框 (子类覆写 _apply_filter 响应)。"""
         self._filter_le.setPlaceholderText(placeholder)
-        self._filter_row.setVisible(True)
+        self._filter_box.setVisible(True)
 
     def filter_text(self) -> str:
         return self._filter_le.text().strip().lower()

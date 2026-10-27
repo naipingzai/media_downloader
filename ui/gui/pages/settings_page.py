@@ -1,6 +1,6 @@
 """内嵌设置页 —— 替代 SettingsDialog。
 
-卡片分组: 存储 / 输出格式 / 下载选项 / FFmpeg / 外观 (字号)
+卡片分组: 存储 / 输出格式 / 下载选项 / 下载队列 / FFmpeg / 外观 (字号)
 """
 from __future__ import annotations
 from PySide6.QtCore import Qt, Signal
@@ -35,7 +35,7 @@ class SettingsPage(QWidget):
         root.setContentsMargins(14, 12, 14, 12)
         root.setSpacing(10)
 
-        # 顶部标题
+        # 顶部标题 + 保存按钮 (页头即保存, 不用滚到底部)
         head = QHBoxLayout()
         title = QLabel("应用设置")
         title.setObjectName("PageTitle")
@@ -44,6 +44,11 @@ class SettingsPage(QWidget):
         self._status = QLabel("")
         self._status.setObjectName("PageStatus")
         head.addWidget(self._status)
+        save_head = QPushButton("保存")
+        save_head.setObjectName("PagePrimaryButton")
+        save_head.setCursor(Qt.PointingHandCursor)
+        save_head.clicked.connect(self._save)
+        head.addWidget(save_head)
         root.addLayout(head)
 
         scroll = QScrollArea()
@@ -75,6 +80,8 @@ class SettingsPage(QWidget):
         self._cards_lay.addWidget(self._build_output_card())
         # 下载选项
         self._cards_lay.addWidget(self._build_download_card())
+        # 下载队列 (限速/暂停/恢复)
+        self._cards_lay.addWidget(self._build_queue_card())
         # FFmpeg
         self._cards_lay.addWidget(self._build_ffmpeg_card())
         # 外观
@@ -176,6 +183,46 @@ class SettingsPage(QWidget):
         lay.addLayout(row)
         return card
 
+    def _build_queue_card(self) -> QWidget:
+        """下载队列控制: 全局限速 + 暂停/恢复 (实时生效)。"""
+        card, lay = self._make_card("下载队列")
+        row = QHBoxLayout()
+        row.setSpacing(10)
+        row.addWidget(QLabel("限速 (KB/s, 0=不限):"))
+        self._speed_input = QLineEdit(str(self._config.speed_limit))
+        self._speed_input.setFixedWidth(90)
+        self._speed_input.setPlaceholderText("0")
+        row.addWidget(self._speed_input)
+        self._pause_btn = QPushButton("暂停全部")
+        self._pause_btn.setObjectName("PageGhostButton")
+        self._pause_btn.setCursor(Qt.PointingHandCursor)
+        self._pause_btn.clicked.connect(self._toggle_pause)
+        row.addWidget(self._pause_btn)
+        row.addStretch()
+        lay.addLayout(row)
+        hint = QLabel("限速保存后全局生效; 暂停/恢复立即作用于进行中的下载")
+        hint.setObjectName("CardHint")
+        lay.addWidget(hint)
+        self._sync_pause_btn()
+        return card
+
+    def _sync_pause_btn(self):
+        try:
+            from shared.flow.queue import get_queue
+            paused = get_queue().paused
+        except Exception:
+            paused = False
+        self._pause_btn.setText("恢复下载" if paused else "暂停全部")
+
+    def _toggle_pause(self):
+        from shared.flow.queue import get_queue
+        q = get_queue()
+        if q.paused:
+            q.resume_all()
+        else:
+            q.pause_all()
+        self._sync_pause_btn()
+
     def _build_ffmpeg_card(self) -> QWidget:
         card, lay = self._make_card("FFmpeg")
         ffmpeg_display = self._config.ffmpeg_path
@@ -257,6 +304,17 @@ class SettingsPage(QWidget):
             self._config.download_metadata = self._dl_metadata.isChecked()
             self._config.ffmpeg_path = self._ffmpeg.text().strip()
             self._config.font_size = int(self._font_slider.value())
+            # 限速: 持久化 + 立即应用到队列
+            try:
+                limit = max(0, int(self._speed_input.text().strip() or "0"))
+            except ValueError:
+                limit = 0
+            self._config.speed_limit = limit
+            try:
+                from shared.flow.queue import get_queue
+                get_queue().set_speed_limit(limit)
+            except Exception:
+                pass
             ConfigManager.save(self._config)
             self._status.setText("✓ 已保存")
             self.settings_saved.emit()

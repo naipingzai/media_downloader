@@ -30,7 +30,7 @@ class LogPanel(QFrame):
             btn = QPushButton(text)
             btn.setObjectName("PageGhostButton")
             btn.setCursor(Qt.PointingHandCursor)
-            btn.setFixedHeight(22)
+            btn.setFixedHeight(max(20, btn.fontMetrics().height() + 6))
             btn.clicked.connect(slot)
             hdr.addWidget(btn)
         v.addLayout(hdr)

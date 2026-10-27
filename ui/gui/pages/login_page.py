@@ -189,7 +189,7 @@ class LoginPage(QWidget):
         self._mask_btn = QPushButton("隐藏")
         self._mask_btn.setObjectName("PageGhostButton")
         self._mask_btn.setCursor(Qt.PointingHandCursor)
-        self._mask_btn.setFixedHeight(24)
+        self._mask_btn.setFixedHeight(max(20, self._mask_btn.fontMetrics().height() + 6))
         self._mask_btn.clicked.connect(self._toggle_mask)
         mask_row = QHBoxLayout()
         mask_row.addStretch()

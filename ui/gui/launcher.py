@@ -23,25 +23,39 @@ def _find_check_icon() -> Path | None:
 
 
 def _apply_font(app, font_size: int):
-    """全局字体设置 (字号由配置决定)。"""
+    """全局字体设置。
+
+    - pointSize (而非 pixelSize): 跟随系统 DPI 缩放, 用户改整体显示
+      大小时所有组件/文字/图片/按钮等比例拉伸 (HiDPI 正确行为)。
+    - 12~20 的配置值映射为 pointSize (约等于原 px 值的 0.75 倍)。
+    """
     from PySide6.QtGui import QFont
     font = QFont()
     font.setFamilies(["Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC",
                       "Noto Sans CJK SC", "WenQuanYi Micro Hei",
                       "Source Han Sans CN"])
-    font.setPixelSize(max(10, int(font_size)))
+    # px → pt: 100% 缩放下 1pt ≈ 1.333px; clamp 到合理范围
+    pt = max(9, min(16, round(font_size * 0.75)))
+    font.setPointSize(pt)
     app.setFont(font)
 
 
 def launch():
+    # ---- HiDPI: 跟随系统缩放 (用户改显示大小 → 全 UI 等比拉伸) ----
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QGuiApplication
+    QGuiApplication.setHighDpiScaleFactorRoundingPolicy(
+        Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
+
     try:
         from PySide6.QtWidgets import QApplication
     except ImportError:
         print("请安装 PySide6: pip install PySide6")
         return
+    # 必须在 QApplication 创建前设置缩放属性
     app = QApplication(sys.argv)
     app.setApplicationName("MediaDownloader")
-    # 加载配置 → 应用字号
+    # 加载配置 → 应用字体
     from shared.core.config import ConfigManager
     cfg = ConfigManager.load()
     _apply_font(app, cfg.font_size)
