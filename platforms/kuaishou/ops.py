@@ -1,0 +1,288 @@
+"""快手平台操作表。"""
+from shared.core.ops import PlatformOps, FeatureMeta, FeatureResult
+from shared.core.config import ConfigManager
+
+
+class KuaishouOps(PlatformOps):
+    _adapter_class = None  # 由 __init__ 绑定 (避免循环导入)
+
+    @classmethod
+    def adapter_class(cls):
+        """返回 adapter 类 (框架统一接口)。"""
+        if cls._adapter_class is None:
+            from .adapter import KuaishouAdapter
+            cls._adapter_class = KuaishouAdapter
+        return cls._adapter_class
+
+    platform_id = "kuaishou"
+    display_name = "Kuaishou"
+    cookie_hint = "需要 Cookie"
+
+    features = [
+        # emits_work_info: 单作品功能, 结果 data[0] 供 UI 作品资料卡展示
+        # group: work=作品操作 / user=作者操作 / platform=平台功能
+        FeatureMeta("download",   "下载单个作品",       True,
+                    emits_work_info=True, group="work"),
+        FeatureMeta("account",    "批量下载账号作品",   True, group="work"),
+        FeatureMeta("collection", "批量下载收藏作品",   False, group="work"),
+        FeatureMeta("user",       "采集账号详细数据",   True, group="user"),
+        FeatureMeta("following",  "采集关注列表",       True, group="user"),
+    ]
+
+    async def _get_adapter(self, cookie: str):
+        from .adapter import KuaishouAdapter
+        from shared.core.adapter import PlatformConfig
+        return KuaishouAdapter(config=PlatformConfig(
+            name="kuaishou", display_name=self.display_name,
+            domains=["kuaishou.com"], cookie=cookie))
+
+    async def _do_download(self, url, cookie, save_dir) -> FeatureResult:
+        adapter = await self._get_adapter(cookie)
+        storage = ConfigManager.get_storage_ops("kuaishou")
+        try:
+            from shared.flow.link import LinkExtractor
+            from shared.flow.download import FileDownloader
+            from shared.core.session import create_async_client
+            client = create_async_client()
+            try:
+                links = await LinkExtractor(client).run(url, "kuaishou")
+            finally:
+                await client.close()
+            if not links:
+                return FeatureResult(False, "未提取到有效链接")
+            log, files = [], []
+            def _log(msg):
+                log.append(msg)
+                self.log(msg)
+            for i, link in enumerate(links, 1):
+                _log(f"[{i}/{len(links)}] {link.url[:60]}")
+                raw = await adapter.request_detail(link)
+                if not raw:
+                    _log("  获取详情失败"); continue
+                work = adapter.parse_detail(raw)
+                if not work:
+                    _log("  解析失败"); continue
+                _log(f"  {work.get('author_name', '?')}: {work.get('title', '')[:40]}")
+                urls = adapter.get_download_urls(work)
+                if not urls:
+                    _log("  无下载地址"); continue
+                target = storage.resolve(work)
+                dlc = create_async_client()
+                try:
+                    dl = FileDownloader(client=dlc, save_dir=target.parent, task_key=self.task_key)
+                    result = await dl.download_file(urls[0], target.name)
+                finally:
+                    await dlc.close()
+                if result:
+                    _log(f"  ✓ {result}")
+                    self._record_history(work, str(result), log[-5:])
+                    files.append(str(result))
+                else:
+                    _log("  ✗ 下载失败")
+            return FeatureResult(True, f"处理 {len(links)} 个链接", log=log, files=files)
+        finally:
+            await adapter.close()
+
+    async def _do_account(self, url, cookie, save_dir, selected=None) -> FeatureResult:
+        adapter = await self._get_adapter(cookie)
+        storage = ConfigManager.get_storage_ops("kuaishou")
+        try:
+            user_id = url.strip().rstrip("/").split("/")[-1]
+            if not user_id:
+                return FeatureResult(False, "无法提取用户ID")
+            log = [f"用户: {user_id}"]
+            cache_key = f"ks_account:{user_id}"
+            videos = self._cache_get(cache_key)
+            if videos is None:
+                videos = await adapter.fetch_user_videos(user_id)
+                if not videos:
+                    return FeatureResult(False, "获取用户作品失败或为空", log=log)
+                self._cache_put(cache_key, videos)
+            log.append(f"共 {len(videos)} 个视频")
+
+            # ── 第一阶段：返回预览（封面/标题/时长/点赞）──
+            if selected is None:
+                items = [self._video_preview(v, user_id) for v in videos]
+                return FeatureResult(True, f"共 {len(items)} 个作品，待选择下载",
+                                     data=items, preview="batch", log=log)
+
+            # ── 第二阶段：下载勾选项 ──
+            sel = {str(s) for s in selected}
+            targets = [v for v in videos
+                       if str(v.get("photoId") or v.get("id") or "") in sel]
+            if not targets:
+                return FeatureResult(False, "未匹配到勾选的作品（列表可能已过期，请重新执行）",
+                                     log=log)
+            from shared.flow.download import FileDownloader
+            from shared.core.session import create_async_client
+            files = []
+            for i, v in enumerate(targets, 1):
+                if self.stopped():
+                    msg = "  ✗ 用户停止，跳过剩余任务"
+                    log.append(msg); self.log(msg)
+                    break
+                title = v.get("caption", "")[:40] or v.get("title", "")[:40] or "unknown"
+                photo_id = v.get("photoId", "") or v.get("id", "")
+                log.append(f"[{i}/{len(targets)}] {title}")
+                video_url = v.get("mainMvUrl", "") or v.get("url", "")
+                if not video_url:
+                    log.append("  无下载地址"); continue
+                work = {"platform": "kuaishou", "work_id": photo_id, "title": title,
+                        "author_name": user_id}
+                target = storage.resolve(work)
+                dlc = create_async_client()
+                try:
+                    dl = FileDownloader(client=dlc, save_dir=target.parent, task_key=self.task_key)
+                    result = await dl.download_file(video_url, target.name)
+                finally:
+                    await dlc.close()
+                if result:
+                    log.append(f"  ✓ {result}")
+                    self._record_history(
+                        {"platform": "kuaishou", "work_id": photo_id,
+                         "title": v.get("caption") or v.get("title") or "",
+                         "author_name": user_id},
+                        str(result), log[-5:])
+                    files.append(str(result))
+                else:
+                    log.append("  ✗ 下载失败")
+            return FeatureResult(True, f"批量下载 {len(files)}/{len(targets)} 个",
+                                 log=log, files=files)
+        finally:
+            await adapter.close()
+
+    @staticmethod
+    def _video_preview(v: dict, author: str = "") -> dict:
+        """列表项 → 预览条目。字段按快手 profile/feed 结构防御式提取。"""
+        cover = ""
+        for key in ("coverUrls", "coverUrl", "poster", "thumbnailUrl"):
+            c = v.get(key)
+            if isinstance(c, list) and c and isinstance(c[0], dict):
+                cover = c[0].get("url") or cover
+                if cover:
+                    break
+            elif isinstance(c, str) and c:
+                cover = c
+                break
+        duration = v.get("duration") or v.get("videoDuration") or 0
+        try:
+            duration = int(duration)
+        except (TypeError, ValueError):
+            duration = 0
+        if duration > 36000:  # 毫秒兜底（>10小时视为毫秒）
+            duration //= 1000
+        return {
+            "platform": "kuaishou",
+            "work_id": str(v.get("photoId") or v.get("id") or ""),
+            "title": v.get("caption") or v.get("title") or "",
+            "author_name": author,
+            "cover": cover,
+            "duration": duration,
+            "digg_count": v.get("likeCount") or v.get("diggCount") or 0,
+            "extra": "",
+        }
+
+    async def _do_collection(self, url, cookie, save_dir, selected=None) -> FeatureResult:
+        """批量下载快手收藏作品 (不需要链接)。"""
+        adapter = await self._get_adapter(cookie)
+        storage = ConfigManager.get_storage_ops("kuaishou")
+        try:
+            cache_key = "ks_collection"
+            videos = self._cache_get(cache_key)
+            if videos is None:
+                videos = await adapter.fetch_collection(count=50)
+                if not videos:
+                    return FeatureResult(False,
+                        "未拉到收藏作品 (可能未登录 / 接口变化)",
+                        log=["提示: 请在设置里登录快手账号"])
+                self._cache_put(cache_key, videos)
+            log = [f"共 {len(videos)} 个收藏作品"]
+            if selected is None:
+                items = [self._video_preview(v) for v in videos]
+                return FeatureResult(True, f"共 {len(items)} 个收藏作品，待选择下载",
+                                     data=items, preview="batch", log=log)
+            sel = {str(s) for s in selected}
+            targets = [v for v in videos
+                       if str(v.get("photoId") or v.get("id") or "") in sel]
+            return await self._do_batch_download(targets, storage, log)
+        finally:
+            await adapter.close()
+
+    async def _do_user(self, url, cookie, save_dir) -> FeatureResult:
+        """采集快手用户详细资料。"""
+        adapter = await self._get_adapter(cookie)
+        try:
+            user_id = url.strip().rstrip("/").split("/")[-1]
+            profile = await adapter.fetch_user_profile(user_id)
+            if not profile:
+                return FeatureResult(False, "未拉到用户资料", log=[f"用户: {user_id}"])
+            log = [f"用户 ID: {user_id}"]
+            data = [
+                {"field": "昵称", "value": profile.get("nickname", "")},
+                {"field": "UID", "value": profile.get("user_id", user_id)},
+                {"field": "粉丝", "value": profile.get("follower_count", 0)},
+                {"field": "关注", "value": profile.get("following_count", 0)},
+                {"field": "作品", "value": profile.get("aweme_count", 0)},
+                {"field": "签名", "value": profile.get("signature", "")},
+            ]
+            return FeatureResult(True,
+                f"用户: {profile.get('nickname', user_id)}",
+                log=log, data=data)
+        finally:
+            await adapter.close()
+
+    async def _do_following(self, url, cookie, save_dir) -> FeatureResult:
+        """采集快手关注列表。"""
+        adapter = await self._get_adapter(cookie)
+        try:
+            user_id = url.strip().rstrip("/").split("/")[-1]
+            payload = await adapter.fetch_user_following(user_id, count=100)
+            if not payload:
+                return FeatureResult(False,
+                    "未拉到关注列表 (可能未登录 / 接口变化)",
+                    log=["提示: 请在设置里登录快手账号"])
+            users = payload.get("followings", []) if isinstance(payload, dict) else payload
+            log = [f"共 {len(users)} 个关注"]
+            data = [[u.get("nickname", ""),
+                     u.get("follower_count", 0),
+                     u.get("signature", "")[:40]]
+                    for u in users]
+            return FeatureResult(True,
+                f"采集 {len(users)} 个关注",
+                log=log, data=data)
+        finally:
+            await adapter.close()
+
+    async def _do_batch_download(self, targets, storage, log: list) -> FeatureResult:
+        from shared.flow.download import FileDownloader
+        from shared.core.session import create_async_client
+        files = []
+        for i, v in enumerate(targets, 1):
+            if self.stopped():
+                msg = "  ✗ 用户停止，跳过剩余任务"
+                log.append(msg); self.log(msg)
+                break
+            title = v.get("caption") or v.get("title", "")[:40] or "unknown"
+            log.append(f"[{i}/{len(targets)}] {title}")
+            video_url = v.get("mainMvUrl", "") or v.get("url", "")
+            photo_id = str(v.get("photoId") or v.get("id") or "")
+            if not video_url or not photo_id:
+                log.append("  无下载地址或 ID, 跳过"); continue
+            work = {"platform": "kuaishou", "work_id": photo_id, "title": title,
+                    "author_name": v.get("userName", "")}
+            target = storage.resolve(work)
+            dlc = create_async_client()
+            try:
+                dl = FileDownloader(client=dlc, save_dir=target.parent, task_key=self.task_key)
+                result = await dl.download_file(video_url, target.name)
+            finally:
+                await dlc.close()
+            if result:
+                log.append(f"  ✓ {result}")
+                self._record_history(work, str(result), log[-5:])
+                files.append(str(result))
+            else:
+                log.append("  ✗ 下载失败")
+        return FeatureResult(True,
+            f"下载 {len(files)}/{len(targets)} 个",
+            log=log, files=files)

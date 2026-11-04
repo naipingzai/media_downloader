@@ -1,0 +1,485 @@
+/* ============================================================
+   MediaDownloader — 暗色主题
+   ------------------------------------------------------------
+   - 侧栏: 每个分组 (平台/工具/账号) 都是带边框卡片, 按钮也在框内
+   - 展示区: 左侧列表带边框, 右侧内容栈
+   - 内嵌页: 统一的 PageCard / PageTitle 样式
+   ============================================================ */
+
+/* ---------- 全局 ---------- */
+QMainWindow { background: #0f172a; }
+QWidget { color: #e2e8f0; }
+QDialog { background: #0f172a; color: #e2e8f0; }
+QScrollArea { background: transparent; border: none; }
+QScrollArea > QWidget > QWidget { background: transparent; }
+QStatusBar { background: #1e293b; color: #94a3b8; }
+QSplitter::handle { background: transparent; }
+QSplitter::handle:hover { background: #1e293b; }
+QSplitter::handle:pressed { background: #22314a; }
+#BodySplitter::handle { margin: 0 1px; }
+#RightSplitter::handle { margin: 1px 0; }
+
+/* ---------- 顶部横排栏 (TopBar) ---------- */
+#TopBar {
+    background: #0f172a;
+    border-bottom: 1px solid #334155;
+}
+#BrandTitle {
+    color: #facc15; font-size: {{FS_TITLE}}; font-weight: bold;
+    background: transparent; border: none;
+}
+#TopSep { color: #475569; font-size: {{FS_XL}}; background: transparent; border: none; }
+#TopGroupLabel {
+    color: #64748b; font-size: {{FS_XS}}; font-weight: bold;
+    background: transparent; border: none; padding: 0 4px;
+}
+#TopPlatformBtn {
+    background: #1e293b;
+    color: #cbd5e1;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: {{FS_MD}};
+    min-width: 60px;
+}
+#TopPlatformBtn:hover {
+    background: #334155; border-color: #475569; color: #f1f5f9;
+}
+#TopPlatformBtn[active="true"] {
+    background: #22314a;
+    border-color: #38bdf8;
+    color: #38bdf8;
+    font-weight: bold;
+}
+#TopPlatformBtn:pressed { background: #1d4ed8; }
+#TopToolBtn {
+    background: #1e293b;
+    color: #cbd5e1;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: {{FS_MD}};
+}
+#TopToolBtn:hover {
+    background: #334155; border-color: #475569; color: #f1f5f9;
+}
+#TopToolBtn:pressed { background: #1d4ed8; color: white; }
+
+
+/* ---------- 面板 (SectionPanel) ---------- */
+#SectionPanel {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 8px;
+}
+#SectionTitle {
+    color: #cbd5e1;
+    font-size: {{FS_MD}};
+    font-weight: bold;
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+
+/* ---------- 左侧外框 (作者资料 + 作品资料) ---------- */
+#LeftPanel {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 8px;
+}
+#AuthorCard {
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 6px;
+}
+#WorkInfoCard {
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 6px;
+}
+#LeftSubTitle {
+    color: #cbd5e1; font-size: {{FS_MD}}; font-weight: bold;
+    background: transparent; border: none;
+}
+
+/* ---------- 链接栏 ---------- */
+#LinkInput {
+    background: #0f172a; color: #e2e8f0;
+    border: 1px solid #334155; border-radius: 6px;
+    padding: 8px 10px;
+}
+#LinkInput:focus { border-color: #3b82f6; }
+
+/* ---------- 按钮 (通用) ---------- */
+QPushButton {
+    background: #334155; color: #e2e8f0; border: none;
+    border-radius: 6px; padding: 7px 14px; font-size: {{FS_MD}};
+}
+QPushButton:hover { background: #475569; }
+QPushButton:disabled { background: #1f2937; color: #64748b; }
+#PrimaryButton { background: #3b82f6; color: white; font-weight: bold; }
+#PrimaryButton:hover { background: #2563eb; }
+#PrimaryButton:disabled { background: #1f2937; color: #64748b; }
+
+/* ---------- 输入框 / 下拉 ---------- */
+QLineEdit, QComboBox, QSpinBox {
+    background: #0f172a; color: #e2e8f0;
+    border: 1px solid #475569; border-radius: 6px;
+    padding: 6px 10px;
+}
+QLineEdit:focus, QComboBox:focus { border-color: #3b82f6; }
+QComboBox::drop-down { border: none; width: 24px; }
+QComboBox::down-arrow {
+    image: none;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid #94a3b8;
+    margin-right: 8px;
+}
+QComboBox QAbstractItemView {
+    background: #1e293b; color: #e2e8f0;
+    border: 1px solid #475569;
+    selection-background-color: #334155;
+    padding: 4px 0;
+}
+QComboBox QAbstractItemView::item { padding: 6px 10px; min-height: 24px; }
+
+/* ---------- 状态栏 ---------- */
+#StatusLabel, #StatusPlatform, #StatusCookie, #StatusHint, #StatusFFmpeg {
+    background: transparent; border: none;
+    padding-left: 8px; padding-right: 4px;
+    font-size: {{FS_MD}}; color: #94a3b8;
+}
+#StatusCookie { font-weight: bold; }
+#StatusVersion {
+    background: rgba(250, 204, 21, 0.10);
+    color: #facc15;
+    padding: 0 12px; font-weight: bold;
+    border: none;
+    font-size: {{FS_MD}};
+}
+
+/* ---------- 页签 (数据窗口等通用) ---------- */
+QTabBar::tab {
+    background: #0f172a;
+    color: #94a3b8;
+    padding: 8px 18px 8px 14px;
+    border: 1px solid #334155;
+    border-bottom: none;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    margin-right: 8px;
+}
+QTabBar::tab:selected {
+    background: #1e293b;
+    color: #38bdf8;
+    font-weight: bold;
+}
+QTabBar::tab:hover:!selected {
+    background: #22314a;
+    color: #e2e8f0;
+}
+/* 关闭按钮 · 画 × (双斜线) */
+QTabBar::close-button {
+    /* SVG 中画 × (用 SVG 嵌入让跨平台都看到 ×, 不依赖 image 资源) */
+    image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'><line x1='2' y1='2' x2='8' y2='8' stroke='%2394a3b8' stroke-width='1.4'/><line x1='8' y1='2' x2='2' y2='8' stroke='%2394a3b8' stroke-width='1.4'/></svg>");
+    subcontrol-position: right;
+    background: transparent;
+    border: none;
+    width: 14px; height: 14px;
+    margin: 0 6px 0 6px;
+}
+QTabBar::close-button:hover {
+    image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'><line x1='2' y1='2' x2='8' y2='8' stroke='%23ef4444' stroke-width='1.8'/><line x1='8' y1='2' x2='2' y2='8' stroke='%23ef4444' stroke-width='1.8'/></svg>");
+}
+
+/* ---------- 内嵌页通用 ---------- */
+#PageTitle {
+    color: #f1f5f9; font-size: {{FS_TITLE}}; font-weight: bold;
+    background: transparent; border: none;
+}
+#PageStatus {
+    color: #94a3b8; font-size: {{FS_MD}}; background: transparent; border: none;
+}
+#PageCard {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 8px;
+}
+#CardTitle {
+    color: #cbd5e1; font-size: {{FS_LG}}; font-weight: bold;
+    background: transparent; border: none;
+}
+#CardHint {
+    color: #94a3b8; font-size: {{FS_XS}}; background: transparent; border: none;
+}
+#CardStatus {
+    color: #94a3b8; font-size: {{FS_XS}}; background: transparent; border: none;
+}
+#CardInput {
+    background: #0f172a; color: #e2e8f0;
+    border: 1px solid #334155; border-radius: 6px;
+    padding: 8px 10px;
+}
+#CardInput:focus { border-color: #3b82f6; }
+#CookieInput {
+    background: #0f172a; color: #e2e8f0;
+    border: 1px solid #334155; border-radius: 6px;
+    padding: 8px 10px;
+    font-family: monospace; font-size: {{FS_SM}};
+}
+#CookieInput:focus { border-color: #3b82f6; }
+#FontSizeLabel {
+    color: #38bdf8; font-size: {{FS_MD}}; font-weight: bold;
+    background: transparent; border: none; min-width: 56px;
+}
+#PagePrimaryButton {
+    background: #1d4ed8; color: white; border: none;
+    border-radius: 6px; padding: 8px 18px; font-size: {{FS_MD}}; font-weight: bold;
+}
+#PagePrimaryButton:hover { background: #2563eb; }
+#PagePrimaryButton:disabled { background: #334155; color: #64748b; }
+#PageGhostButton {
+    background: transparent; color: #94a3b8;
+    border: 1px solid #334155; border-radius: 6px;
+    padding: 8px 16px; font-size: {{FS_MD}};
+}
+#PageGhostButton:hover { background: #334155; color: #e2e8f0; }
+#PageBadge { font-size: {{FS_SM}}; font-weight: bold; }
+
+/* QR Holder (白底) */
+#QRHolder { background: white; border-radius: 10px; border: none; }
+#QRHolder QLabel { color: #475569; font-size: {{FS_MD}}; background: transparent; border: none; }
+#QRStatus { color: #94a3b8; font-size: {{FS_MD}}; background: transparent; border: none; }
+
+/* ---------- 复选框 ---------- */
+QCheckBox { color: #e2e8f0; spacing: 6px; }
+QCheckBox::indicator {
+    width: 16px; height: 16px;
+    border: 2px solid #64748b; border-radius: 3px;
+    background: transparent;
+}
+QCheckBox::indicator:checked {
+    border-color: #38bdf8; background: #38bdf8;
+    image: url("{{CHECK_ICON}}");
+}
+QCheckBox::indicator:hover { border-color: #38bdf8; }
+
+/* ---------- 滑块 ---------- */
+QSlider::groove:horizontal {
+    height: 6px; background: #1f2937; border-radius: 3px;
+}
+QSlider::handle:horizontal {
+    width: 16px; height: 16px;
+    margin: -5px 0;
+    background: #38bdf8;
+    border-radius: 8px;
+    border: none;
+}
+QSlider::sub-page:horizontal {
+    background: #38bdf8; border-radius: 3px;
+}
+QSlider::tick:horizontal { color: #475569; }
+
+
+/* ---------- 通用表格 ---------- */
+QTableWidget {
+    background: #1e293b; color: #e2e8f0;
+    border: 1px solid #334155; border-radius: 4px;
+    gridline-color: #334155;
+}
+QTableWidget::item { padding: 4px; }
+QTableWidget::item:selected { background: #334155; color: #e2e8f0; }
+QHeaderView::section {
+    background: #1e293b; color: #94a3b8;
+    border: none; border-bottom: 1px solid #334155;
+    padding: 6px 4px; font-weight: bold;
+}
+
+/* ---------- 信息行 / 列表项 ---------- */
+#InfoRow {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 4px;
+}
+#UserTableRow, #TableRow { background: #1e293b; border: 1px solid #334155; border-radius: 6px; }
+#VerticalWorkCard { background: #1e293b; border: 2px solid #334155; border-radius: 8px; }
+
+/* ---------- 日志 ---------- */
+QTextEdit {
+    background: transparent; color: #e2e8f0;
+    font-family: monospace; font-size: {{FS_MD}}; border: none;
+}
+#CollapsibleLog {
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 6px;
+}
+
+/* ---------- 列表斑马纹 (property zebra) ---------- */
+#UserTableRow[zebra="odd"] { background: #16213a; }
+#UserTableRow[zebra="even"] { background: #1e293b; }
+#LogPanel { background: #0f172a; border: 1px solid #334155; border-radius: 6px; }
+
+/* ---------- 空态 ---------- */
+#EmptyState { color: #64748b; padding: 40px 20px;
+             background: transparent; border: none; }
+
+/* ============================================================
+   组件细化 (v2): 组件内不再写死颜色, 统一由本文件控制
+   ============================================================ */
+
+/* 过滤输入 */
+#FilterInput {
+    background: #0f172a; color: #e2e8f0;
+    border: 1px solid #334155; border-radius: 6px;
+    padding: 7px 10px;
+}
+#FilterInput:focus { border-color: #3b82f6; }
+
+/* 日志 */
+#LogPanelTitle { color: #cbd5e1; font-size: {{FS_LG}}; font-weight: bold;
+    background: transparent; border: none; }
+#LogPanel QTextEdit, #LogPanel QTextEdit:focus { background: transparent;
+    color: #e2e8f0; border: none; }
+#DownloadProgress { background: #0f172a; border: 1px solid #334155;
+    border-radius: 4px; color: #e2e8f0; font-size: {{FS_TINY}}; text-align: center; }
+#DownloadProgress::chunk { background: #38bdf8; border-radius: 3px; }
+
+/* 作品资料 */
+#VideoTitle { color: #e2e8f0; font-size: {{FS_XL}}; font-weight: bold;
+    background: transparent; border: none; padding: 0; }
+#VideoSubtitle, #VideoMeta { color: #94a3b8; font-size: {{FS_SM}};
+    background: transparent; border: none; }
+#VideoState { color: #22c55e; font-size: {{FS_SM}}; font-weight: bold;
+    background: transparent; border: none; }
+
+/* 信息行 */
+#InfoRowLabel { color: #64748b; background: transparent; border: none; }
+#InfoRowValue { color: #e2e8f0; background: transparent; border: none; }
+
+/* 作者资料 */
+#AuthorAvatar { background: #1e293b; color: #64748b; border-radius: 26px;
+    border: 2px solid #334155; font-size: {{FS_XL}}; font-weight: bold; }
+#AuthorNick { color: #f1f5f9; font-size: {{FS_XL}}; font-weight: bold;
+    background: transparent; border: none; }
+#AuthorSig { color: #94a3b8; font-size: {{FS_MD}}; background: transparent; border: none; }
+#AuthorExpandBtn { color: #64748b; font-size: {{FS_MD}}; background: #1e293b;
+  border: 1px solid #334155; border-radius: 11px; }
+#AuthorExpandBtn:hover { color: #38bdf8; border-color: #38bdf8; }
+#DialogTitle { color: #f1f5f9; font-size: {{FS_XL}}; font-weight: bold; border: none; }
+#DialogSub { color: #64748b; font-size: {{FS_XS}}; border: none; }
+#DialogBody { color: #cbd5e1; font-size: {{FS_MD}}; border: none; }
+#BrowseTabs::pane { border: 1px solid #334155; border-radius: 6px; background: #0f172a; }
+#BrowseTabs::tab { color: #94a3b8; background: transparent; padding: 6px 14px;
+  border: none; border-bottom: 2px solid transparent; }
+#BrowseTabs::tab:selected { color: #38bdf8; border-bottom: 2px solid #38bdf8; }
+#BrowseTabs::tab:hover { color: #e2e8f0; }
+#TaskPanel { background: #0f172a; border: none; }
+#TaskPanelTitle { color: #cbd5e1; font-size: {{FS_MD}}; font-weight: bold;
+    background: transparent; border: none; }
+#TaskTable { background: #1e293b; color: #e2e8f0; border: 1px solid #334155;
+    border-radius: 4px; gridline-color: #334155; font-size: {{FS_XS}}; }
+#TaskTable::item { padding: 2px; }
+#TaskTable QHeaderView::section { background: #1e293b; color: #94a3b8;
+    border: none; border-bottom: 1px solid #334155; padding: 4px;
+    font-weight: bold; font-size: {{FS_XS}}; }
+#AuthorStatBox { background: #1e293b; border: 1px solid #334155; border-radius: 6px; }
+#AuthorStatNum { color: #38bdf8; font-size: {{FS_LG}}; font-weight: bold;
+    background: transparent; border: none; }
+#AuthorStatCap { color: #64748b; font-size: {{FS_XS}};
+    background: transparent; border: none; }
+
+/* 作品卡 */
+#WorkCardBody { background: #1e293b; border: 2px solid #334155; border-radius: 8px; }
+#WorkCardBody[selected="true"] {
+    background: #22314a; border: 3px solid #38bdf8;
+}
+#WorkCardTitle { color: #e2e8f0; font-size: {{FS_LG}}; font-weight: bold;
+    background: transparent; border: none; }
+/* 作品网格瓦片 (WorkGridPage 响应式布局) */
+#WorkTileBody { background: #1e293b; border: 2px solid #334155; border-radius: 8px; }
+#WorkTileBody[selected="true"] {
+    background: #22314a; border: 3px solid #38bdf8;
+}
+#WorkTileTitle { color: #e2e8f0; font-size: {{FS_MD}}; font-weight: bold;
+    background: transparent; border: none; }
+#WorkTileAuthor { color: #94a3b8; font-size: {{FS_SM}};
+    background: transparent; border: none; }
+#WorkTileMeta { color: #f59e0b; font-size: {{FS_SM}};
+    background: transparent; border: none; }
+
+/* 功能面板 */
+#FeatureGroupTitle { color: #94a3b8; font-size: {{FS_MD}}; font-weight: bold;
+    background: transparent; border: none; padding: 0; }
+#FeatureBtn { background: #1d4ed8; color: white; border: none;
+    border-radius: 6px; padding: 8px 10px; font-size: {{FS_MD}}; font-weight: bold; }
+#FeatureBtn:hover { background: #2563eb; }
+#FeatureBtn:pressed { background: #1e40af; }
+#FeatureBtn:disabled { background: #334155; color: #64748b; }
+#FeatureGhostBtn { background: transparent; color: #cbd5e1;
+    border: 1px solid #334155; border-radius: 6px; padding: 8px 10px;
+    font-size: {{FS_MD}}; font-weight: bold; }
+#FeatureGhostBtn:hover { background: #334155; border-color: #475569; color: #f1f5f9; }
+#FeatureGhostBtn:disabled { color: #475569; border-color: #334155; }
+#FeatureStopBtn { background: #dc2626; color: white; border: none;
+    border-radius: 6px; padding: 8px 10px; font-size: {{FS_MD}}; font-weight: bold; }
+#FeatureStopBtn:hover { background: #ef4444; }
+
+/* 封面 */
+#CoverLabel { background: #0f172a; color: #475569;
+    border: 1px solid #334155; border-radius: 6px; }
+#CoverLabel[loaded="true"] { border: 1px solid transparent; }
+
+/* 滚动条 */
+QScrollBar:vertical { background: transparent; width: 10px; margin: 2px 0; }
+QScrollBar::handle:vertical { background: #334155; border-radius: 5px; min-height: 28px; }
+QScrollBar::handle:vertical:hover { background: #475569; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
+QScrollBar:horizontal { background: transparent; height: 10px; margin: 0 2px; }
+QScrollBar::handle:horizontal { background: #334155; border-radius: 5px; min-width: 28px; }
+QScrollBar::handle:horizontal:hover { background: #475569; }
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: transparent; }
+
+/* 提示 */
+QToolTip { background: #1e293b; color: #e2e8f0;
+    border: 1px solid #334155; padding: 4px 8px; }
+
+/* 用户列表 */
+#UserAvatar { background: #1e293b; color: #64748b;
+    border: 1px solid #334155; border-radius: 20px;
+    font-size: {{FS_XL}}; font-weight: bold; }
+#UserNick { color: #f1f5f9; font-size: {{FS_XL}}; font-weight: bold;
+    background: transparent; border: none; }
+#UserID, #UserSig { color: #64748b; font-size: {{FS_XS}};
+    background: transparent; border: none; }
+#UserFans { color: #38bdf8; font-size: {{FS_XS}};
+    background: transparent; border: none; }
+
+/* 数据表格 */
+#TableHeader { background: #0f172a; border: 1px solid #334155;
+    border-radius: 6px; }
+#TableHeaderText { color: #38bdf8; font-size: {{FS_MD}};
+    font-weight: bold; background: transparent; border: none; }
+#TableRow[zebra="odd"] { background: #16213a; }
+#TableRow[zebra="even"] { background: #1e293b; }
+#TableCell { color: #cbd5e1; font-size: {{FS_MD}};
+    background: transparent; border: none; }
+
+/* 功能滚动区 */
+#FeatureScroll { background: transparent; border: none; }
+
+/* 登录页状态 */
+#CardStatus[state="ok"] { color: #22c55e; }
+#CardStatus[state="error"] { color: #ef4444; }
+#CardStatus[state="muted"] { color: #64748b; }
+#PageBadge[state="ok"] {
+    background: rgba(34, 197, 94, 0.18); color: #22c55e;
+    border-radius: 10px; padding: 3px 12px;
+}
+#PageBadge[state="error"] {
+    background: rgba(239, 68, 68, 0.18); color: #ef4444;
+    border-radius: 10px; padding: 3px 12px;
+}

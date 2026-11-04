@@ -1,0 +1,227 @@
+"""构建脚本 — 下载 FFmpeg + PyInstaller 打包 (Linux/Windows onefile)。
+
+用法:
+    python scripts/build.py                # 下载 FFmpeg + 打包 (当前平台)
+    python scripts/build.py --no-ffmpeg    # 不内嵌 FFmpeg (运行时用系统 PATH)
+    python scripts/build.py --ffmpeg file  # 用指定 ffmpeg 文件路径
+
+产物: dist/MediaDownloader[.exe] — 单文件可执行, 含 GUI(PySide6) + TUI(Textual)。
+"""
+import argparse
+import platform
+import shutil
+import subprocess
+import sys
+import urllib.request
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+BUILD_DIR = ROOT / "build"
+DIST_DIR = ROOT / "dist"
+APP_NAME = "MediaDownloader"
+
+FFMPEG_LINUX_URL = "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz"
+FFMPEG_WIN_URL = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+
+
+def download_file(url, dest):
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    print(f"  Downloading: {url.split('/')[-1]}")
+    urllib.request.urlretrieve(url, str(dest))
+    print("  Done.")
+
+
+def get_pyinstaller_cmd(ffmpeg_path: str | None):
+    """Build the PyInstaller command with all hidden imports."""
+    is_win = platform.system() == "Windows"
+    sep = ";" if is_win else ":"
+    check_svg = ROOT / "static" / "checkbox_check.svg"
+    qss_dir = ROOT / "ui" / "gui" / "resources"
+
+    cmd = [
+        sys.executable, "-m", "PyInstaller",
+        "--name", APP_NAME,
+        "--onefile",
+        "--windowed",
+        "--noconfirm",
+        "--clean",
+        "--additional-hooks-dir", str(ROOT / "hooks"),
+    ]
+    if ffmpeg_path:
+        cmd += ["--add-data", f"{ffmpeg_path}{sep}."]
+    cmd += [
+        # Bundle QSS 主题文件 (运行时由 theme.py 从 ui/gui/resources 读取)
+        "--add-data", f"{qss_dir}{sep}ui/gui/resources",
+        "--add-data", f"{check_svg}{sep}static",
+        # Core dependencies
+        "--hidden-import", "curl_cffi",
+        "--hidden-import", "curl_cffi._curl_cffi",
+        "--hidden-import", "PySide6",
+        "--hidden-import", "PySide6.QtWidgets",
+        "--hidden-import", "PySide6.QtCore",
+        "--hidden-import", "PySide6.QtGui",
+        "--hidden-import", "qrcode",
+        "--hidden-import", "PIL",
+        "--hidden-import", "PIL.Image",
+        "--hidden-import", "textual",
+        # Platform modules
+        "--hidden-import", "platforms",
+        "--hidden-import", "platforms.douyin",
+        "--hidden-import", "platforms.douyin.adapter",
+        "--hidden-import", "platforms.douyin.ops",
+        "--hidden-import", "platforms.douyin.login",
+        "--hidden-import", "platforms.douyin.encrypt",
+        "--hidden-import", "platforms.douyin.encrypt.douyin_params",
+        "--hidden-import", "platforms.douyin.encrypt.tiktok_params",
+        "--hidden-import", "platforms.douyin.encrypt.aBogus",
+        "--hidden-import", "platforms.douyin.encrypt.websign",
+        "--hidden-import", "platforms.douyin.encrypt.tiktok_sign",
+        "--hidden-import", "platforms.douyin.encrypt.params",
+        "--hidden-import", "platforms.douyin.encrypt.sm3",
+        "--hidden-import", "platforms.kuaishou",
+        "--hidden-import", "platforms.kuaishou.adapter",
+        "--hidden-import", "platforms.kuaishou.ops",
+        "--hidden-import", "platforms.kuaishou.login",
+        "--hidden-import", "platforms.xiaohongshu",
+        "--hidden-import", "platforms.xiaohongshu.adapter",
+        "--hidden-import", "platforms.xiaohongshu.ops",
+        "--hidden-import", "platforms.xiaohongshu.login",
+        "--hidden-import", "platforms.bilibili",
+        "--hidden-import", "platforms.bilibili.adapter",
+        "--hidden-import", "platforms.bilibili.ops",
+        "--hidden-import", "platforms.bilibili.login",
+        # Shared modules
+        "--hidden-import", "shared.core.ops",
+        "--hidden-import", "shared.core.secret",
+        "--hidden-import", "shared.core.logger",
+        "--hidden-import", "shared.core.error",
+        "--hidden-import", "shared.core.retry",
+        "--hidden-import", "shared.core.adapter",
+        "--hidden-import", "shared.core.config",
+        "--hidden-import", "shared.core.ffmpeg",
+        "--hidden-import", "shared.core.cookies",
+        "--hidden-import", "shared.core.session",
+        "--hidden-import", "shared.core.storage",
+        "--hidden-import", "shared.core.i18n",
+        "--hidden-import", "shared.core.constants",
+        "--hidden-import", "shared.core.format",
+        "--hidden-import", "shared.core.formats",
+        "--hidden-import", "shared.core.login",
+        "--hidden-import", "shared.flow.link",
+        "--hidden-import", "shared.flow.download",
+        "--hidden-import", "shared.flow.queue",
+        "--hidden-import", "shared.flow.request",
+        "--hidden-import", "shared.flow.extract",
+        "--hidden-import", "shared.flow.export",
+        "--hidden-import", "shared.flow.storage",
+        # GUI (PySide6)
+        "--hidden-import", "ui.gui",
+        "--hidden-import", "ui.gui.launcher",
+        "--hidden-import", "ui.gui.main_window",
+        "--hidden-import", "ui.gui.task_keeper",
+        "--hidden-import", "ui.gui.cover_loader",
+        "--hidden-import", "ui.gui.threads.worker",
+        "--hidden-import", "ui.gui.resources.theme",
+        "--hidden-import", "ui.gui.widgets",
+        "--hidden-import", "ui.gui.widgets.author_profile_panel",
+        "--hidden-import", "ui.gui.widgets.cover_label",
+        "--hidden-import", "ui.gui.widgets.feature_panel",
+        "--hidden-import", "ui.gui.widgets.log_panel",
+        "--hidden-import", "ui.gui.widgets.section_panel",
+        "--hidden-import", "ui.gui.widgets.tool_window",
+        "--hidden-import", "ui.gui.widgets.video_info",
+        "--hidden-import", "ui.gui.widgets.work_card",
+        "--hidden-import", "ui.gui.pages",
+        "--hidden-import", "ui.gui.pages.base_page",
+        "--hidden-import", "ui.gui.pages.work_grid_page",
+        "--hidden-import", "ui.gui.pages.users_page",
+        "--hidden-import", "ui.gui.pages.data_table_page",
+        "--hidden-import", "ui.gui.pages.login_page",
+        "--hidden-import", "ui.gui.pages.settings_page",
+        # TUI (Textual)
+        "--hidden-import", "ui.tui",
+        "--hidden-import", "ui.tui.app",
+        "--hidden-import", "ui.tui.screens",
+        str(ROOT / "main.py"),
+    ]
+    return cmd
+
+
+def setup_linux_ffmpeg():
+    print("\n=== Downloading Linux FFmpeg ===")
+    archive = BUILD_DIR / "ffmpeg-linux.tar.xz"
+    if not archive.exists():
+        download_file(FFMPEG_LINUX_URL, archive)
+    print("  Extracting...")
+    subprocess.run(["tar", "xf", str(archive), "-C", str(BUILD_DIR)], check=True)
+    dest = BUILD_DIR / "ffmpeg"
+    if dest.exists() and dest.is_file():
+        dest.chmod(0o755)
+        print(f"  FFmpeg (already exists): {dest}")
+        return dest
+    for f in BUILD_DIR.rglob("ffmpeg"):
+        if f.is_file() and f != dest:
+            shutil.copy2(f, dest)
+            dest.chmod(0o755)
+            print(f"  FFmpeg: {dest}")
+            return dest
+    raise FileNotFoundError("ffmpeg not found")
+
+
+def setup_windows_ffmpeg():
+    print("\n=== Downloading Windows FFmpeg ===")
+    archive = BUILD_DIR / "ffmpeg-win.zip"
+    if not archive.exists():
+        download_file(FFMPEG_WIN_URL, archive)
+    import zipfile
+    with zipfile.ZipFile(archive) as zf:
+        for name in zf.namelist():
+            if name.endswith("ffmpeg.exe"):
+                with zf.open(name) as src, open(BUILD_DIR / "ffmpeg.exe", "wb") as dst:
+                    dst.write(src.read())
+                print(f"  FFmpeg: {BUILD_DIR / 'ffmpeg.exe'}")
+                return BUILD_DIR / "ffmpeg.exe"
+    raise FileNotFoundError("ffmpeg.exe not found")
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Build MediaDownloader onefile")
+    ap.add_argument("--no-ffmpeg", action="store_true",
+                    help="不下载/内嵌 FFmpeg (运行时使用系统 PATH 中的 ffmpeg)")
+    ap.add_argument("--ffmpeg", type=str, default="",
+                    help="直接指定要内嵌的 ffmpeg 可执行文件路径")
+    args = ap.parse_args()
+
+    print(f"MediaDownloader Build - {platform.system()}")
+    BUILD_DIR.mkdir(exist_ok=True)
+    DIST_DIR.mkdir(exist_ok=True)
+
+    ffmpeg_path = ""
+    if args.ffmpeg:
+        ffmpeg_path = args.ffmpeg
+        print(f"  FFmpeg (custom): {ffmpeg_path}")
+    elif not args.no_ffmpeg:
+        try:
+            if platform.system() == "Linux":
+                ffmpeg_path = str(setup_linux_ffmpeg())
+            elif platform.system() == "Windows":
+                ffmpeg_path = str(setup_windows_ffmpeg())
+            else:
+                print(f"Unsupported: {platform.system()}")
+                return 1
+        except Exception as e:
+            print(f"  ⚠ FFmpeg 下载失败 ({e}); 降级为不内嵌 (运行时需系统安装 ffmpeg)")
+
+    cmd = get_pyinstaller_cmd(ffmpeg_path or None)
+    print("\nRunning PyInstaller...")
+    subprocess.run(cmd, check=True)
+
+    print("\n=== Build Complete ===")
+    for f in DIST_DIR.iterdir():
+        size_mb = f.stat().st_size / 1024 / 1024
+        print(f"  {f.name}: {size_mb:.1f} MB")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

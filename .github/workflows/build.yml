@@ -1,0 +1,111 @@
+name: Build Release
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            binary: dist/MediaDownloader
+            artifact: MediaDownloader-linux-x86_64
+            ffmpeg_cache: build/ffmpeg-linux.tar.xz
+          - os: windows-2022
+            platform: windows
+            binary: dist/MediaDownloader.exe
+            artifact: MediaDownloader-windows-x86_64.exe
+            ffmpeg_cache: build/ffmpeg-win.zip
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Linux system libraries
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgl1 libegl1 libxkbcommon0 libdbus-1-3
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install "pyinstaller>=6.0"
+
+      - name: Cache FFmpeg archive
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.ffmpeg_cache }}
+          key: ffmpeg-${{ matrix.platform }}-v1
+
+      - name: Build single-file binary
+        run: python scripts/build.py
+
+      - name: Verify binary
+        run: |
+          ls -lh "${{ matrix.binary }}"
+          test -f "${{ matrix.binary }}"
+
+      - name: Prepare release artifact
+        run: |
+          mkdir -p out
+          cp "${{ matrix.binary }}" "out/${{ matrix.artifact }}"
+          chmod +x "out/${{ matrix.artifact }}" || true
+          cd out
+          sha256sum "${{ matrix.artifact }}" > "SHA256SUMS-${{ matrix.platform }}.txt"
+          ls -lh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: out/*
+          if-no-files-found: error
+          retention-days: 90
+
+  release:
+    name: Release v1.0
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: MediaDownloader v1.0
+          files: dist/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true
